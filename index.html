@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lab Core — multi-language runtime</title>
+    <link rel="stylesheet" href="/src/ui/style.css" />
+  </head>
+  <body>
+    <header id="topbar">
+      <strong>lab-core</strong>
+      <select id="lang" aria-label="Język"></select>
+      <select id="example" aria-label="Przykład"></select>
+      <button id="run">RUN</button>
+      <button id="stop" disabled>STOP</button>
+      <button id="clear-world" title="Usuwa wszystkie zarejestrowane komponenty (interop)">Wyczyść świat</button>
+      <span id="status" role="status"></span>
+    </header>
+    <main>
+      <section id="editor-pane">
+        <div id="file-tabs"></div>
+        <textarea id="editor" spellcheck="false"></textarea>
+      </section>
+      <section id="output-pane">
+        <pre id="console" aria-label="Konsola"></pre>
+        <canvas id="canvas" width="640" height="360" tabindex="0"></canvas>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

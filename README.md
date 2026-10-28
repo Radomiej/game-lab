@@ -1,0 +1,122 @@
+# lab-core — jeden engine labowy, wiele języków
+
+Prototyp: bazowa konsola + canvas jako wspólny rdzeń, a języki jako
+wymienne nakładki ("overlays") wpięte przez **Lab Runtime Protocol (LRP)**
+plus **World Registry** — wspólny świat GameObject/Component, który
+umożliwia interop między językami na poziomie publicznych pól i metod.
+
+Wzorzec wzięty z `java-lab` (`shared/lab-game-v2/contract.json`) — tu
+protokół jest formalnie wydzielony i niezależny od języka.
+
+```powershell
+cd C:\Nauka\lab-core
+npm install
+npm run dev        # http://127.0.0.1:5190
+```
+
+## Warstwy
+
+```
+UI (main.ts)           — edytor, konsola, canvas, wybór języka
+LabHost (core/host.ts)  — stdout/stderr, draw(), input, stdin, pętla gry
+LRP (core/protocol.ts)  — DrawCmd, RunRequest, LabHost, LabRuntime
+WorldRegistry           — handle GameObject/Component + get/set/invoke
+  (core/world.ts)         marshalowane przez host (hub-and-spoke)
+Renderer (core/engine.ts) — canvas 2D + InputTracker
+Nakładki (src/runtimes/*) — po jednej na język
+```
+
+Nakładka **nie dotyka DOM**. Dostaje `LabHost`, tłumaczy natywne
+wywołania (`print`, `lab.drawRect`, `cin >>`…) na LRP i zwraca
+`RunResult`. Renderer/konsola/wejście/świat są współdzielone.
+
+## Kontrakt dla kodu ucznia (identyczny we wszystkich językach)
+
+- `print(...)` → konsola; stdin czytane `lab.input()` / `input()`.
+- Gra: skrypt definiuje `init()` i/lub `update(dt)` — host odpala
+  pętlę rAF, `dt` w sekundach z clamp 0.1 s (jak java-lab).
+- Fasada `lab.*`: `drawRect/Circle/Line/Text`, `clear`,
+  `isKeyDown(code)`, `isKeyPressed(code)`, `width()`, `height()`.
+- **Interop**: `lab.spawn()`, `lab.attachComponent(obj, kind, impl)`,
+  `lab.getComponent(obj, kind)`, `lab.findComponent(kind)`,
+  `lab.getProp(id, k)`, `lab.setProp(id, k, v)`, `lab.call(id, m, ...)`,
+  `lab.worldInfo()`. Host tickuje `update(dt)` każdego komponentu
+  co klatkę — niezależnie od języka, w którym został napisany.
+
+## Interop w praktyce (zweryfikowane)
+
+1. Wybierz Lua → "Interop: komponent Chaser" → RUN (rejestruje
+   komponent z tabeli Lua: publiczne `x, y, speed` + metody
+   `setTarget`, `update`).
+2. Wybierz Python → "Interop: komponent Wanderer" → RUN.
+3. Wybierz JavaScript → "Gra: interop" → RUN: kod JS iteruje
+   `lab.worldInfo()`, czyta publiczne pola, woła metody — a host
+   tickuje `update(dt)` napisane w Lua/Pythonie co klatkę.
+   "Wyczyść świat" resetuje rejestr.
+
+Wywołania są synchroniczne, bo JS/TS/Lua/Python żyją w jednym wątku.
+Dla WASM-runów (C++/Java) ta sama ścieżka działa przez eksport WASM
+lub jako async marshaling — interfejs `ComponentBridge` już toleruje
+Promise w `invoke`.
+
+## Status nakładek
+
+| Język | Runtime | Pobieranie | Stan |
+|---|---|---|---|
+| JavaScript | natywny (`new Function`) | 0 | działa: konsola + gra + interop |
+| TypeScript | sucrase (strip types) | ~1 MB | działa: gra |
+| Lua | **wasmoon** (Lua 5.4→WASM) | ~0.5 MB | działa: konsola + gra + interop |
+| Luau (Roblox) | **slot** — patrz niżej | ~1–2 MB | opis niżej |
+| Python | Pyodide (CPython→WASM, lazy CDN) | ~10–30 MB | działa: konsola + gra + interop |
+| C++ | JSCPP (interpreter podzbioru) | ~0.5 MB | konsola; gra wymaga clang→WASM |
+| Java | **slot** — TeaVM z java-lab | ~7 MB | opis niżej |
+| Kotlin | **slot** — patrz niżej | — | odroczone |
+
+## Sloty
+
+### Luau (Roblox)
+
+Realna opcja, bo Luau jest projektowany do osadzania i ma **oficjalny
+target `Luau.Web`** w `luau-lang/luau` (budowa przez Emscripten; napędza
+demo na luau-lang.org). Ścieżka: skompilować raz → `vendor/luau/` +
+nakładka jak `lua.ts`. Bonus: `Luau.Analyze` w WASM daje w przeglądarce
+typowy typecheck (wartość pedagogiczna: uczniowie Robloxa znają składnię).
+Alternatywa: transpiler podzbioru Luau→Lua 5.4 (strip typów, `+=`→`=`,
+`continue`→`goto`, interpolacja→`string.format`, iteracja uogólniona→
+`pairs`) — pokrywa większość kodu szkolnego, ale bez pełnej zgodności.
+Roblox-specific API (`game`, `Instance`, `Vector3`) — mapowalne na
+`lab.*`/`WorldRegistry`, analogicznie do fasady silnika.
+
+### Java (TeaVM) — do podpięcia
+
+Assety i know-how już istnieją: `C:\Nauka\java-lab\public\vendor\teavm`
+(`compiler.wasm` ~4 MB, classlib `.bin`, `teavm.worker.js`) oraz
+`src/services/teavmRunner.js`. Nakładka: worker ładuje compiler.wasm,
+Java→WASM, komendy draw z silnika mapować 1:1 na `DrawCmd`.
+
+### Kotlin — odroczone
+
+Kompilator Kotlin→JS w przeglądarce (kotlin-compiler-js z web-demo
+JetBrains) jest ogromny i rzadko aktualizowany. Opcje: (a) backend
+kompilacji (Judge0 self-host / serwer szkolny), (b) Kotlin/WASM gdy
+toolchain dojrzeje, (c) wypuszczenie z zakresu v1.
+
+## Ograniczenia POC (świadome)
+
+- Student code jedzie w main thread — nieskończona pętla w JS zamraża
+  UI (wasmoon ma `functionTimeout`, inne runtime nie). Docelowo
+  Web Workery jak w java-lab; wtedy sync interop wymaga
+  SharedArrayBuffer+Atomics → COOP/COEP (zakomentowane w vite.config).
+- stdin: kolejka linii, nie blokująca. Blokujący `cin`/`input()`
+  = Atomics.wait + izolacja cross-origin.
+- Marshal interopu = prymitywy (number/string/bool/handle-id). Obiekty
+  zagnieżdżone i klasy — warstwa v2 (CBOR/pointer handles).
+- Brak Monaco, przykłady jednoplikowe; brak sprite'ów/atlasu.
+- Testy zadań (porównanie stdout) nie zaimplementowane — wzorzec
+  `java-lab/src/services/lessonChecker.js`.
+
+## Zależności / licencje
+
+wasmoon MIT (Lua 5.4/WASM), sucrase MIT, Pyodide Apache-2.0 (CDN),
+JSCPP MIT. Ścieżka docelowa C++: `BertalanD/browsercc`,
+`msorvig/llvm-wasi`, `debugger-sh` (Stanford) — prawdziwy clang→WASM.

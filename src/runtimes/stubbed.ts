@@ -1,0 +1,45 @@
+import type { LabHost, LabRuntime, RunRequest, RunResult } from "../core/protocol";
+
+// Sloty zarezerwowane dla ciężkich runtime — szczegóły w README (sekcja Roadmap).
+function planned(id: string, label: string, exts: string[], plan: string): LabRuntime {
+  return {
+    id,
+    label,
+    extensions: exts,
+    async run(_req: RunRequest, host: LabHost): Promise<RunResult> {
+      host.stderr(`${label}: nakładka nie podpięta w tym prototypie.\n${plan}\n`);
+      return { status: "runtime-error", message: "not wired" };
+    },
+    stop() {},
+  };
+}
+
+export const javaRuntime = planned(
+  "java",
+  "Java",
+  ["java"],
+  "Slot: worker + TeaVM. Gotowe assety w C:\\Nauka\\java-lab\\public\\vendor\\teavm\n" +
+    "(compiler.wasm ~4 MB, classlib, teavm.worker.js). Nakładka = przeniesienie\n" +
+    "teavmRunner.js i mapowanie komend draw na protokół z core/protocol.ts.",
+);
+
+export const luauRuntime = planned(
+  "luau",
+  "Luau (Roblox)",
+  ["luau"],
+  "Slot: Luau (fork Lua 5.1 Robloxa) ma OFICJALNY target webowy w repo\n" +
+    "luau-lang/luau — 'Luau.Web' budowany przez Emscripten (napędza demo\n" +
+    "na luau-lang.org). Nakładka = vendored luau.wasm + ten sam kontrakt LRP\n" +
+    "co wasmoon. Alternatywa lekka: transpiler podzbioru Luau->Lua 5.4\n" +
+    "(strip typów, += -> =, continue -> goto) — bez pełnej zgodności.",
+);
+
+export const kotlinRuntime = planned(
+  "kotlin",
+  "Kotlin",
+  ["kt", "kts"],
+  "Slot odroczony: kompilator Kotlin w przeglądarce nie ma lekkiego odpowiednika\n" +
+    "TeaVM. Opcje: (a) kotlin-compiler-js z web-demo JetBrains — duży i rzadko\n" +
+    "aktualizowany; (b) kompilacja Kotlin/JS lub Kotlin/WASM na backendzie\n" +
+    "(np. Judge0/własny serwer szkolny); (c) wypuszczenie Kotlinu z zakresu v1.",
+);
