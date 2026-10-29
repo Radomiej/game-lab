@@ -2,6 +2,7 @@ import { transform } from "sucrase";
 import type { LabHost, LabRuntime, RunRequest, RunResult } from "../core/protocol";
 import { createLabFacade, LabStop } from "../core/host";
 import { createLabEngine, labEngineDisposed, type GameLabApi } from "../engine/index";
+import { bindWorld } from "../engine/bridge";
 
 // JavaScript/TypeScript: kod ucznia jest body funkcji; może zdefiniować
 // init() i update(dt) — wtedy host odpala pętlę. Bez nich: tryb konsoli.
@@ -92,6 +93,9 @@ function makeRuntime(id: "javascript" | "typescript", label: string, ts: boolean
       // pętla trzyma tylko żywotność run() (STOP/restart/pauza z IDE).
       const game = GameLab?.current;
       if (game) {
+        // Komponenty z innych języków (Lua/Python) materializują się w tej
+        // scenie — silnik tickuje ich update(dt) jak natywnych komponentów.
+        bindWorld(host, GameLab!);
         const onEngineError = (e: Event) => {
           const err = (e as ErrorEvent).error ?? e;
           host.stderr(`[game] ${err instanceof Error ? err.message : String(err)}\n`);

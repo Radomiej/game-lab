@@ -29,6 +29,9 @@ export interface RegisteredComponent {
   kind: string;
   lang: string;
   bridge: ComponentBridge;
+  /** Zmostkowany do silnika GameLab — silnik tickuje go przez onUpdate,
+   *  więc world.tick pomija go dopóki silnik żyje (bez podwójnego ticku). */
+  engineDriven?: boolean;
 }
 
 /** Węzeł hierarchii sceny — GameObject z jego komponentami (jak Unity). */
@@ -95,9 +98,11 @@ export class WorldRegistry {
   }
 
   /** Tickuje update(dt) na wszystkich komponentach — woła host raz na klatkę.
-   *  invoke może zwracać Promise (runtime z async FFI, np. część silników WASM). */
-  async tick(dt: number, onError: (comp: RegisteredComponent, err: unknown) => void): Promise<void> {
+   *  engineLive=true: komponenty zmostkowane do GameLab pomijamy (silnik je
+   *  tickuje sam). invoke może zwracać Promise (async FFI, np. WASM). */
+  async tick(dt: number, onError: (comp: RegisteredComponent, err: unknown) => void, engineLive = false): Promise<void> {
     for (const c of this.components.values()) {
+      if (engineLive && c.engineDriven) continue;
       try {
         await c.bridge.invoke("update", [dt]);
       } catch (err) {

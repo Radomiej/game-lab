@@ -24,4 +24,8 @@ function chaser:update(dt)
 end
 
 local id = lab.attachComponent(obj, "Chaser", chaser)
+-- Sprite z assetów silnika — odpala LAB·BOY; pola x/y komponentu
+-- napędzają transform GameObjectu (silnik sam rysuje i tickuje).
+lab.attachRenderer(obj, { type = "sprite", texture = "slime", width = 36, height = 36 })
+lab.setPosition(obj, chaser.x, chaser.y)
 print("Chaser (Lua) -> obiekt " .. obj .. ", komponent " .. id)

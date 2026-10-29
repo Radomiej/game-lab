@@ -2,6 +2,7 @@ import { LuaFactory, type LuaEngine, type LuaMultiReturn } from "wasmoon";
 import type { LabHost, LabRuntime, RunRequest, RunResult } from "../core/protocol";
 import { createLabFacade } from "../core/host";
 import type { ComponentBridge } from "../core/world";
+import { getActiveEngine, getActiveGame, labEngineDisposed } from "../engine/index";
 
 // wasmoon = prawdziwy Lua 5.4 skompilowany do WASM (~500 KB, z dist/glue.wasm).
 // Engine jest TRWAŁY między RUN-ami — komponenty zarejestrowane w jednym
@@ -93,6 +94,17 @@ export const luaRuntime: LabRuntime = {
       } else if (hasInit) {
         call(initFn);
       }
+      // Kod mógł zmaterializować scenę w silniku (attachRenderer/spawn) —
+      // trzymamy run() do Stop, silnik sam tickuje zmostkowane komponenty.
+      const game = getActiveGame();
+      if (game) {
+        host.onPaused = (p) => (p ? game.pause() : game.resume());
+        try {
+          await host.startGameLoop(() => {});
+        } finally {
+          host.onPaused = undefined;
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       host.stderr(msg + "\n");
@@ -100,6 +112,8 @@ export const luaRuntime: LabRuntime = {
     } finally {
       st.global.set("update", null);
       st.global.set("init", null);
+      getActiveEngine()?.dispose();
+      labEngineDisposed();
     }
 
     return { status: "ok" };

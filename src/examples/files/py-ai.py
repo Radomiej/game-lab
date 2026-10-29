@@ -28,4 +28,6 @@ class Wanderer:
 
 wanderer = Wanderer()
 comp_id = lab.attachComponent(obj, "Wanderer", wanderer)
+lab.attachRenderer(obj, {"type": "sprite", "texture": "ghost", "width": 36, "height": 36})
+lab.setPosition(obj, wanderer.x, wanderer.y)
 print(f"Wanderer (Python) -> obiekt {obj}, komponent {comp_id}")

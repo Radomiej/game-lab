@@ -27,6 +27,12 @@ export function getActiveGame(): LabEngineGame | null {
   return active?.current ?? null;
 }
 
+/** Całe API aktywnego silnika — most WorldRegistry i fasada lab.* używają
+ *  go do materializacji GameObjectów/komponentów z innych języków. */
+export function getActiveEngine(): GameLabApi | null {
+  return active;
+}
+
 export function createLabEngine(canvas: HTMLCanvasElement): GameLabApi {
   const docShim = {
     querySelector: (sel: string) => (sel === "#game" ? canvas : document.querySelector(sel)),

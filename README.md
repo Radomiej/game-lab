@@ -42,6 +42,16 @@ wywołania (`print`, `lab.drawRect`, `cin >>`…) na LRP i zwraca
   `lab.getProp(id, k)`, `lab.setProp(id, k, v)`, `lab.call(id, m, ...)`,
   `lab.worldInfo()`. Host tickuje `update(dt)` każdego komponentu
   co klatkę — niezależnie od języka, w którym został napisany.
+- **Most do silnika GameLab** (`engine/bridge.ts`): przy żywym silniku
+  `spawn`/`attachComponent` materializują się jako prawdziwe
+  `GameObject`/`Component` — silnik tickuje ich `update(dt)` w fazie
+  WORLD jak natywnych. `lab.attachRenderer(obj, spec)` dokłada
+  `Sprite`/`ShapeRenderer`/`TextRenderer` i w razie potrzeby bootuje
+  silnik (`attachRenderer` z Lua/Pythona samo odpala LAB·BOY).
+  `lab.setPosition/setTransform/getPosition` sterują transformem.
+  Konwencja: publiczne pola `x`/`y` komponentu napędzają transform
+  GameObjectu automatycznie. spec: `{type:'sprite'|'rect'|'circle'|
+  'text', texture,width,height,color,text,fontSize,layer,order,space}`.
 - **Hierarchia** (panel pod podglądem, jak Unity Hierarchy + Inspector):
   GameObject → komponenty → publiczne pola z wartościami na żywo
   i metody; węzły zwijane, badge pokazuje język komponentu.

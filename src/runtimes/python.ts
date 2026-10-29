@@ -1,6 +1,7 @@
 import type { LabHost, LabRuntime, RunRequest, RunResult } from "../core/protocol";
 import { createLabFacade } from "../core/host";
 import type { ComponentBridge } from "../core/world";
+import { getActiveEngine, getActiveGame, labEngineDisposed } from "../engine/index";
 
 // Pyodide = prawdziwy CPython skompilowany do WASM. Ładowany leniwie,
 // dopiero przy pierwszym uruchomieniu Pythona (~10–30 MB z CDN; do
@@ -105,10 +106,23 @@ export const pythonRuntime: LabRuntime = {
       } else if (initFn) {
         initFn();
       }
+      // Kod mógł zmaterializować scenę w silniku — trzymamy run() do Stop.
+      const game = getActiveGame();
+      if (game) {
+        host.onPaused = (p) => (p ? game.pause() : game.resume());
+        try {
+          await host.startGameLoop(() => {});
+        } finally {
+          host.onPaused = undefined;
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       host.stderr(msg + "\n");
       return { status: "runtime-error", message: msg };
+    } finally {
+      getActiveEngine()?.dispose();
+      labEngineDisposed();
     }
 
     return { status: "ok" };

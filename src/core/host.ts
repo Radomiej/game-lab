@@ -3,6 +3,16 @@ import { CanvasRenderer, InputTracker } from "./engine";
 import { WorldRegistry, type ComponentBridge, type RegisteredComponent } from "./world";
 import { assetManifest } from "../engine/assets/Assets.js";
 import { userAssets } from "./userAssets";
+import { getActiveGame } from "../engine/index";
+import {
+  bridgeAttachComponent,
+  bridgeAttachRenderer,
+  bridgeDestroyObject,
+  bridgeGetTransform,
+  bridgeSetTransform,
+  bridgeSpawn,
+  type RendererSpec,
+} from "../engine/bridge";
 
 /** Wewnętrzny sygnał zatrzymania pętli — nie jest błędem ucznia. */
 export class LabStop extends Error {
@@ -150,8 +160,12 @@ export class DomLabHost implements LabHost {
         }
         this.framePressed = this.input.takePressed();
         // Interop: komponenty z innych języków tickują razem z klatką.
-        await this._world.tick(dt, (c, err) =>
-          this.stderr(`\n[${c.lang}:${c.kind}] ${err instanceof Error ? err.message : String(err)}\n`),
+        // Zmostkowane do silnika pomijamy, gdy gra żyje — tickuje je silnik.
+        await this._world.tick(
+          dt,
+          (c, err) =>
+            this.stderr(`\n[${c.lang}:${c.kind}] ${err instanceof Error ? err.message : String(err)}\n`),
+          getActiveGame() !== null,
         );
         try {
           await update(dt);
@@ -269,16 +283,43 @@ export function createLabFacade(host: LabHost, lang: string, ctx?: { files?: Rec
     },
 
     // ---- Interop: GameObject + Component na handle'ach ----
+    // Przy żywym silniku spawn/attach materializują się jako prawdziwe
+    // GameObject/Component GameLab (transform, renderer, update z silnika).
     spawn(name?: string): number {
-      return world.spawnObject(name);
+      const id = world.spawnObject(name);
+      bridgeSpawn(host, id, name ?? `GameObject ${id}`);
+      return id;
     },
     /** impl zależy od języka: obiekt JS / tabela Lua / obiekt Python — nakładka mostkuje. */
     attachComponent(objectId: number, kind: string, impl: unknown): number {
-      return world.attach(objectId, kind, lang, toBridge(impl));
+      const id = world.attach(objectId, kind, lang, toBridge(impl));
+      bridgeAttachComponent(host, world.component(id)!);
+      return id;
     },
     /** Wariant dla nakładek z własnym mostkiem (np. tabela Lua). */
     attachBridge(objectId: number, kind: string, bridge: ComponentBridge): number {
-      return world.attach(objectId, kind, lang, bridge);
+      const id = world.attach(objectId, kind, lang, bridge);
+      bridgeAttachComponent(host, world.component(id)!);
+      return id;
+    },
+    /** Renderer na obiekcie — bootuje silnik, jeśli jeszcze nie działa.
+     *  spec: {type:'sprite'|'rect'|'circle'|'text', texture,width,height,color,text,fontSize,layer,order,space} */
+    attachRenderer(objectId: number, spec: RendererSpec = {}): boolean {
+      return bridgeAttachRenderer(host, objectId, spec);
+    },
+    setPosition(objectId: number, x: number, y: number): void {
+      bridgeSetTransform(objectId, { x, y });
+    },
+    getPosition(objectId: number): { x: number; y: number } | null {
+      const t = bridgeGetTransform(objectId);
+      return t ? { x: t.x, y: t.y } : null;
+    },
+    /** Częściowa zmiana transformu: {x,y,rotation,scaleX,scaleY}. */
+    setTransform(objectId: number, t: { x?: number; y?: number; rotation?: number; scaleX?: number; scaleY?: number }): void {
+      bridgeSetTransform(objectId, t);
+    },
+    getTransform(objectId: number) {
+      return bridgeGetTransform(objectId);
     },
     getComponent(objectId: number, kind: string): number | null {
       return world.findOnObject(objectId, kind) ?? null;
@@ -297,6 +338,7 @@ export function createLabFacade(host: LabHost, lang: string, ctx?: { files?: Rec
     },
     destroyObject(objectId: number): void {
       world.destroyObject(objectId);
+      bridgeDestroyObject(objectId);
     },
     worldInfo(): RegisteredComponent[] {
       return world.describe();
