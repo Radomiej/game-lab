@@ -186,7 +186,7 @@ main {
   flex-direction: column;
   border-top: 1px solid var(--line);
   background: var(--navy-900);
-  max-height: 42%;
+  max-height: 34%;
 }
 .console-heading {
   display: flex;
@@ -196,7 +196,20 @@ main {
   padding: 8px 16px;
   background: var(--navy-800);
   border-bottom: 1px solid var(--line-soft);
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
 }
+.console-heading:hover h2 { color: var(--teal-bright); }
+.console-chevron { transition: transform 0.15s; color: var(--ink-faint); }
+.runtime-console.collapsed .console-chevron { transform: rotate(-90deg); }
+.runtime-console.collapsed .console-output { display: none; }
+.runtime-console.collapsed { flex: 0 0 auto; max-height: none; }
 .console-heading h2 {
   margin: 0;
   color: var(--ink);
@@ -260,20 +273,42 @@ main {
 }
 .preview-heading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   background: var(--navy-800);
   border-bottom: 1px solid var(--line-soft);
 }
 .preview-heading h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
+.preview-actions { display: flex; align-items: center; gap: 10px; }
 .preview-hint { font-size: 11px; color: var(--ink-faint); }
+.fps {
+  font: 600 11px var(--mono);
+  color: var(--teal-bright);
+  min-width: 48px;
+  text-align: right;
+}
+.btn-mini {
+  padding: 3px 10px;
+  font-size: 11px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.btn-mini:hover:not(:disabled) { color: var(--ink); border-color: #3d5364; background: rgb(255 255 255 / 4%); }
+.btn-mini:disabled { opacity: 0.4; cursor: default; }
+.btn-mini.active { color: var(--yellow); border-color: rgb(232 193 105 / 45%); background: var(--yellow-soft); }
 #canvas {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
   height: auto;
+  max-height: 60%;
+  object-fit: contain;
   background: #080d13;
   border-bottom: 1px solid var(--line);
 }

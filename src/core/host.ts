@@ -22,7 +22,18 @@ export class DomLabHost implements LabHost {
   private stdinLines: string[] = [];
   private framePressed = new Set<string>();
   private stopped = false;
+  private paused = false;
   private loopAbort: (() => void) | null = null;
+
+  /** Callback ~1×/s z realnym FPS pętli gry (podgląd w IDE). */
+  onFps: ((fps: number) => void) | null = null;
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+  }
+  get isPaused(): boolean {
+    return this.paused;
+  }
 
   constructor(
     private consoleOut: ConsoleSink,
@@ -33,6 +44,7 @@ export class DomLabHost implements LabHost {
 
   begin(stdin?: string): void {
     this.stopped = false;
+    this.paused = false;
     this.stdinLines = (stdin ?? "").split("\n").filter((_, i, a) => !(i === a.length - 1 && a[i] === ""));
     this.framePressed.clear();
     this.input.attach(this.canvas);
@@ -101,6 +113,8 @@ export class DomLabHost implements LabHost {
     return new Promise((resolve) => {
       let raf = 0;
       let last = performance.now();
+      let frames = 0;
+      let fpsAt = last;
       this.loopAbort = () => {
         cancelAnimationFrame(raf);
         resolve();
@@ -110,6 +124,16 @@ export class DomLabHost implements LabHost {
         // dt w sekundach, z clamp jak w java-lab (0.1 s)
         const dt = Math.min((now - last) / 1000, 0.1);
         last = now;
+        frames++;
+        if (now - fpsAt >= 1000) {
+          this.onFps?.(Math.round((frames * 1000) / (now - fpsAt)));
+          frames = 0;
+          fpsAt = now;
+        }
+        if (this.paused) {
+          raf = requestAnimationFrame(step);
+          return;
+        }
         this.framePressed = this.input.takePressed();
         // Interop: komponenty z innych języków tickują razem z klatką.
         await this._world.tick(dt, (c, err) =>

@@ -14,6 +14,11 @@ const consoleEl = $("#console");
 const pillEl = $("#status-pill");
 const stdinEl = $<HTMLInputElement>("#stdin");
 const canvas = $<HTMLCanvasElement>("#canvas");
+const pauseBtn = $<HTMLButtonElement>("#pause");
+const restartBtn = $<HTMLButtonElement>("#restart");
+const fpsEl = $("#fps");
+const consoleToggle = $<HTMLButtonElement>("#console-toggle");
+const consoleSection = document.querySelector(".runtime-console") as HTMLElement;
 const editor = $<HTMLTextAreaElement>("#editor");
 const gutterEl = $("#gutter");
 const tabsEl = $("#file-tabs");
@@ -27,6 +32,7 @@ let currentFiles: Record<string, string> = {};
 let entryFile = "main.js";
 let openFile = entryFile;
 let running = false;
+let wantRestart = false;
 
 function fillLanguages(): void {
   langSel.innerHTML = "";
@@ -125,11 +131,20 @@ function drawCanvasPlaceholder(): void {
   ctx.fillText("podgląd gry — lab.draw*() trafia tutaj", canvas.width / 2, canvas.height / 2);
 }
 
+host.onFps = (fps) => {
+  fpsEl.textContent = `${fps} fps`;
+};
+
 async function run(): Promise<void> {
   if (running) return;
   running = true;
   runBtn.disabled = true;
   stopBtn.disabled = false;
+  pauseBtn.disabled = false;
+  restartBtn.disabled = false;
+  pauseBtn.classList.remove("active");
+  pauseBtn.textContent = "Pauza";
+  fpsEl.textContent = "— fps";
   term.clear();
   currentFiles[openFile] = editor.value;
   const stdin = stdinEl.value.split("\\n").join("\n");
@@ -157,6 +172,12 @@ async function run(): Promise<void> {
     running = false;
     runBtn.disabled = false;
     stopBtn.disabled = true;
+    pauseBtn.disabled = true;
+    fpsEl.textContent = "— fps";
+    if (wantRestart) {
+      wantRestart = false;
+      setTimeout(() => void run(), 60);
+    }
   }
 }
 
@@ -190,6 +211,25 @@ stopBtn.onclick = () => {
   currentRuntime.stop();
   host.requestStop();
   term.write("sys", "zatrzymuję…\n");
+};
+restartBtn.onclick = () => {
+  if (!running) return;
+  wantRestart = true;
+  currentRuntime.stop();
+  host.requestStop();
+  term.write("sys", "restart…\n");
+};
+pauseBtn.onclick = () => {
+  const next = !host.isPaused;
+  host.setPaused(next);
+  pauseBtn.classList.toggle("active", next);
+  pauseBtn.textContent = next ? "Wznów" : "Pauza";
+  term.write("sys", next ? "pauza\n" : "wznawiam…\n");
+  canvas.focus();
+};
+consoleToggle.onclick = () => {
+  const collapsed = consoleSection.classList.toggle("collapsed");
+  consoleToggle.setAttribute("aria-expanded", String(!collapsed));
 };
 clearBtn.onclick = () => {
   host.clearWorld();

@@ -12,26 +12,11 @@ const content = (path: string) => raw[`./files/${path}`]!;
 
 export const examples: LabExample[] = [
   {
-    id: "js-console",
-    label: "Konsola",
-    runtime: "javascript",
-    entry: "main.js",
-    files: { "main.js": content("js-console.js") },
-    stdin: "Uczeń",
-  },
-  {
     id: "js-game",
     label: "Gra: monety",
     runtime: "javascript",
     entry: "main.js",
     files: { "main.js": content("js-game.js") },
-  },
-  {
-    id: "ts-game",
-    label: "Gra: odbicia",
-    runtime: "typescript",
-    entry: "main.ts",
-    files: { "main.ts": content("ts-game.ts") },
   },
   {
     id: "js-interop",
@@ -41,12 +26,19 @@ export const examples: LabExample[] = [
     files: { "main.js": content("js-interop.js") },
   },
   {
-    id: "lua-console",
+    id: "js-console",
     label: "Konsola",
-    runtime: "lua",
-    entry: "main.lua",
-    files: { "main.lua": content("lua-console.lua") },
+    runtime: "javascript",
+    entry: "main.js",
+    files: { "main.js": content("js-console.js") },
     stdin: "Uczeń",
+  },
+  {
+    id: "ts-game",
+    label: "Gra: odbicia",
+    runtime: "typescript",
+    entry: "main.ts",
+    files: { "main.ts": content("ts-game.ts") },
   },
   {
     id: "lua-game",
@@ -63,11 +55,12 @@ export const examples: LabExample[] = [
     files: { "main.lua": content("lua-ai.lua") },
   },
   {
-    id: "py-console",
+    id: "lua-console",
     label: "Konsola",
-    runtime: "python",
-    entry: "main.py",
-    files: { "main.py": content("py-console.py") },
+    runtime: "lua",
+    entry: "main.lua",
+    files: { "main.lua": content("lua-console.lua") },
+    stdin: "Uczeń",
   },
   {
     id: "py-game",
@@ -82,6 +75,13 @@ export const examples: LabExample[] = [
     runtime: "python",
     entry: "main.py",
     files: { "main.py": content("py-ai.py") },
+  },
+  {
+    id: "py-console",
+    label: "Konsola",
+    runtime: "python",
+    entry: "main.py",
+    files: { "main.py": content("py-console.py") },
   },
   {
     id: "cpp-console",

@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>lab-core — wielojęzykowy lab runtime</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23101c28'/%3E%3Crect x='3.5' y='3.5' width='9' height='9' rx='2' fill='none' stroke='%2313a89e' stroke-width='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.8' fill='%2365d6c8'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/ui/style.css" />
   </head>
   <body>
@@ -37,20 +38,26 @@
           <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Kod źródłowy"></textarea>
         </div>
         <section class="runtime-console" aria-labelledby="console-title">
-          <div class="console-heading">
+          <button id="console-toggle" class="console-heading" aria-expanded="true" aria-controls="console">
             <h2 id="console-title">Konsola</h2>
             <div class="console-heading-side">
-              <input id="stdin" class="stdin-input" type="text" placeholder="stdin dla input() / cin — \n jako nowa linia" aria-label="Standardowe wejście programu" />
+              <input id="stdin" class="stdin-input" type="text" placeholder="stdin dla input() / cin — \n jako nowa linia" aria-label="Standardowe wejście programu" onclick="event.stopPropagation()" />
               <span id="status-pill" class="runtime-pill runtime-pill--idle" role="status">Czeka</span>
+              <svg class="console-chevron" viewBox="0 0 10 6" width="10" height="6" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
             </div>
-          </div>
+          </button>
           <pre id="console" class="console-output" tabindex="0" aria-label="Wynik programu i komunikaty"></pre>
         </section>
       </section>
       <aside class="preview-pane" aria-label="Podgląd">
         <div class="preview-heading">
           <h2>Podgląd</h2>
-          <span class="preview-hint">kliknij canvas i steruj klawiaturą</span>
+          <div class="preview-actions">
+            <span id="fps" class="fps" title="Klatki na sekundę">— fps</span>
+            <button id="pause" class="btn btn-mini" disabled title="Pauza/wznów pętlę gry">Pauza</button>
+            <button id="restart" class="btn btn-mini" disabled title="Uruchom ponownie od zera">Restart</button>
+            <span class="preview-hint">kliknij canvas, steruj klawiaturą</span>
+          </div>
         </div>
         <canvas id="canvas" width="640" height="360" tabindex="0"></canvas>
         <div class="world-panel">
