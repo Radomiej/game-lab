@@ -4,6 +4,9 @@ export default defineConfig({
   optimizeDeps: {
     // JSCPP jest CJS i ładowane dynamicznie — musi być prebundlowane
     include: ["JSCPP"],
+    // @wasmsharp/core: vendored w public/vendor/wasmsharp (raw ESM)
+    // — omija bundler całkowicie (import.meta.url -> assety .dll/.wasm)
+    exclude: ["@wasmsharp/core"],
   },
   server: {
     host: "127.0.0.1",

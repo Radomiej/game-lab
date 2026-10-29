@@ -33,13 +33,3 @@ export const luauRuntime = planned(
     "co wasmoon. Alternatywa lekka: transpiler podzbioru Luau->Lua 5.4\n" +
     "(strip typów, += -> =, continue -> goto) — bez pełnej zgodności.",
 );
-
-export const kotlinRuntime = planned(
-  "kotlin",
-  "Kotlin",
-  ["kt", "kts"],
-  "Slot odroczony: kompilator Kotlin w przeglądarce nie ma lekkiego odpowiednika\n" +
-    "TeaVM. Opcje: (a) kotlin-compiler-js z web-demo JetBrains — duży i rzadko\n" +
-    "aktualizowany; (b) kompilacja Kotlin/JS lub Kotlin/WASM na backendzie\n" +
-    "(np. Judge0/własny serwer szkolny); (c) wypuszczenie Kotlinu z zakresu v1.",
-);

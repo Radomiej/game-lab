@@ -69,8 +69,8 @@ Promise w `invoke`.
 | Luau (Roblox) | **slot** — patrz niżej | ~1–2 MB | opis niżej |
 | Python | Pyodide (CPython→WASM, lazy CDN) | ~10–30 MB | działa: konsola + gra + interop |
 | C++ | JSCPP (interpreter podzbioru) | ~0.5 MB | konsola; gra wymaga clang→WASM |
+| C# | **@wasmsharp/core** (.NET WASM + Roslyn) | ~41 MB lazy | działa: konsola (prawdziwa kompilacja) |
 | Java | **slot** — TeaVM z java-lab | ~7 MB | opis niżej |
-| Kotlin | **slot** — patrz niżej | — | odroczone |
 
 ## Sloty
 
@@ -94,12 +94,28 @@ Assety i know-how już istnieją: `C:\Nauka\java-lab\public\vendor\teavm`
 `src/services/teavmRunner.js`. Nakładka: worker ładuje compiler.wasm,
 Java→WASM, komendy draw z silnika mapować 1:1 na `DrawCmd`.
 
-### Kotlin — odroczone
+### C# (@wasmsharp/core) — vendored
 
-Kompilator Kotlin→JS w przeglądarce (kotlin-compiler-js z web-demo
-JetBrains) jest ogromny i rzadko aktualizowany. Opcje: (a) backend
-kompilacji (Judge0 self-host / serwer szkolny), (b) Kotlin/WASM gdy
-toolchain dojrzeje, (c) wypuszczenie z zakresu v1.
+Prawdziwy .NET runtime (`dotnet.native.wasm`) + **Roslyn kompilujący kod
+ucznia do IL w przeglądarce** — dokładny odpowiednik architektury TeaVM
+dla C# (tak działa "Try C#" Microsoftu). Zweryfikowane w przeglądarce:
+top-level statements, `Console.WriteLine`, interpolacja, LINQ/lambda.
+
+Pakiet jest **vendored** do `public/vendor/wasmsharp` skryptem
+`scripts/vendor-wasmsharp.mjs` (uruchamiany raz po `npm install`), bo
+upstream wymaga patchy: (a) ~153 importów assetów `import x from
+"./x.dll|wasm|dat"` → `new URL(...)` (runtime oczekuje string-URLi);
+(b) comlink z unpkg → lokalna kopia; (c) importy bez rozszerzenia.
+Adapter ładuje moduł przez absolutny URL — zero udziału bundlera,
+assemblie resolve'owane względem `import.meta.url`.
+
+Limity POC: pierwszy load ~41 MB (lazy, potem cache przeglądarki);
+`disableWebWorker: true` (worker wymaga HTTPS i `new URL(worker)` w
+bundlerze); entry point = **top-level statements** (klasyczne
+`static void Main()` rzuca `TargetParameterCountException` —
+`CodeSession.RunAsync` woła bezargumentowe entry); kod ucznia bez mostu
+do `lab.*` — gamedev/interop C# wymaga własnego host-assembly z
+`[JSExport]` (roadmapa v2); `Console.ReadLine` bez stdin.
 
 ## Ograniczenia POC (świadome)
 
@@ -118,5 +134,6 @@ toolchain dojrzeje, (c) wypuszczenie z zakresu v1.
 ## Zależności / licencje
 
 wasmoon MIT (Lua 5.4/WASM), sucrase MIT, Pyodide Apache-2.0 (CDN),
-JSCPP MIT. Ścieżka docelowa C++: `BertalanD/browsercc`,
+JSCPP MIT, @wasmsharp/core MIT (.NET WASM + Roslyn), comlink Apache-2.0.
+Ścieżka docelowa C++: `BertalanD/browsercc`,
 `msorvig/llvm-wasi`, `debugger-sh` (Stanford) — prawdziwy clang→WASM.

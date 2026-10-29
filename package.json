@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@wasmsharp/core": "^0.10.2",
+    "comlink": "^4.4.2",
     "JSCPP": "^2.0.9",
     "sucrase": "^3.35.0",
     "wasmoon": "^1.16.0"

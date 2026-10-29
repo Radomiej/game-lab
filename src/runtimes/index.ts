@@ -3,7 +3,8 @@ import { javascriptRuntime, typescriptRuntime } from "./javascript";
 import { luaRuntime } from "./lua";
 import { pythonRuntime } from "./python";
 import { cppRuntime } from "./cpp";
-import { javaRuntime, luauRuntime, kotlinRuntime } from "./stubbed";
+import { csharpRuntime } from "./csharp";
+import { javaRuntime, luauRuntime } from "./stubbed";
 
 export const runtimes: LabRuntime[] = [
   javascriptRuntime,
@@ -12,6 +13,6 @@ export const runtimes: LabRuntime[] = [
   luauRuntime,
   pythonRuntime,
   cppRuntime,
+  csharpRuntime,
   javaRuntime,
-  kotlinRuntime,
 ];

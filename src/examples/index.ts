@@ -98,10 +98,10 @@ export const examples: LabExample[] = [
     files: { "Main.java": 'public class Main {\n  public static void main(String[] a) {\n    System.out.println("slot");\n  }\n}\n' },
   },
   {
-    id: "kotlin-slot",
-    label: "Slot: odroczony",
-    runtime: "kotlin",
-    entry: "Main.kt",
-    files: { "Main.kt": 'fun main() {\n  println("slot")\n}\n' },
+    id: "cs-console",
+    label: "Konsola",
+    runtime: "csharp",
+    entry: "Program.cs",
+    files: { "Program.cs": content("cs-console.cs") },
   },
 ];
