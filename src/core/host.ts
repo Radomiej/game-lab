@@ -204,8 +204,8 @@ export function createLabFacade(host: LabHost, lang: string) {
     },
 
     // ---- Interop: GameObject + Component na handle'ach ----
-    spawn(): number {
-      return world.spawnObject();
+    spawn(name?: string): number {
+      return world.spawnObject(name);
     },
     /** impl zależy od języka: obiekt JS / tabela Lua / obiekt Python — nakładka mostkuje. */
     attachComponent(objectId: number, kind: string, impl: unknown): number {
@@ -248,6 +248,8 @@ export function createLabFacade(host: LabHost, lang: string) {
         o[k] = v;
       },
       invoke: (m, args) => (typeof o[m] === "function" ? (o[m] as (...a: unknown[]) => unknown)(...args) : undefined),
+      listMembers: () =>
+        Object.keys(o).map((k) => ({ name: k, kind: typeof o[k] === "function" ? ("method" as const) : ("prop" as const) })),
     };
   }
 

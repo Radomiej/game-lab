@@ -1,7 +1,7 @@
 -- Interop: rejestruje komponent "Chaser" w świecie hosta.
 -- Uruchom ten plik, a potem js-interop.js — gra w JS będzie
 -- czytać pola i wołać metody TEGO komponentu napisanego w Lua.
-local obj = lab.spawn()
+local obj = lab.spawn("Enemy")
 
 local chaser = {
   x = 80, y = 80,

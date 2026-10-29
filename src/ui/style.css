@@ -336,18 +336,71 @@ main {
   padding: 1px 7px;
   border-radius: 999px;
 }
-.world-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.world-list li {
+.world-list { margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); }
+.world-empty {
   font: 11px var(--mono);
-  color: var(--ink-dim);
-  padding: 4px 8px;
+  color: var(--ink-faint);
+  padding: 6px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  margin: 0;
+}
+
+/* węzeł GameObject — jak w Hierarchy Unity */
+.w-obj {
   border: 1px solid var(--line-soft);
   border-radius: 6px;
   background: var(--navy-900);
+  overflow: hidden;
 }
-.world-list li .w-kind { color: var(--teal-bright); }
-.world-list li .w-lang { color: var(--ink-faint); }
-.world-list li.world-empty { border-style: dashed; color: var(--ink-faint); }
+.w-obj > summary,
+.w-comp > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+.w-obj > summary::-webkit-details-marker,
+.w-comp > summary::-webkit-details-marker { display: none; }
+.w-obj > summary::before,
+.w-comp > summary::before {
+  content: "▸";
+  font-size: 9px;
+  color: var(--ink-faint);
+  transition: transform 0.12s;
+  flex-shrink: 0;
+}
+.w-obj[open] > summary::before,
+.w-comp[open] > summary::before { transform: rotate(90deg); }
+.w-obj > summary:hover,
+.w-comp > summary:hover { background: rgb(255 255 255 / 3%); }
+.w-objname { color: var(--ink); font-weight: 600; }
+.w-oid { color: var(--ink-faint); font-size: 10px; margin-left: auto; }
+
+/* komponent pod obiektem — badge języka jak tag w Unity */
+.w-comp { border-top: 1px solid var(--line-soft); }
+.w-comp > summary { padding-left: 24px; }
+.w-kind { color: var(--teal-bright); }
+.w-lang {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: auto;
+}
+.w-nocomps { margin: 0; padding: 4px 10px 7px 24px; font-size: 10px; color: var(--ink-faint); }
+
+/* publiczne składowe komponentu — mini-inspector */
+.w-members { list-style: none; margin: 0; padding: 3px 10px 8px 40px; display: flex; flex-direction: column; gap: 2px; }
+.w-members li { font-size: 10.5px; display: flex; gap: 6px; }
+.w-mname { color: var(--ink-dim); }
+.w-mname.w-method { color: var(--yellow); }
+.w-mval { color: var(--teal-bright); }
 
 /* ---- responsive ---- */
 @media (max-width: 920px) {

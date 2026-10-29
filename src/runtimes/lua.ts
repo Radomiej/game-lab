@@ -52,6 +52,11 @@ export const luaRuntime: LabRuntime = {
             const fn = impl[m];
             return typeof fn === "function" ? (fn as (...a: unknown[]) => unknown)(impl, ...args) : undefined;
           },
+          listMembers: () =>
+            Object.keys(impl).map((k) => ({
+              name: k,
+              kind: typeof impl[k] === "function" ? ("method" as const) : ("prop" as const),
+            })),
         };
         return lab.attachBridge(objectId, kind, bridge);
       },

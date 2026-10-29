@@ -14,6 +14,13 @@ export interface ComponentBridge {
   get(name: string): unknown;
   set(name: string, value: unknown): void;
   invoke(method: string, args: unknown[]): unknown;
+  /** Opcjonalnie: publiczne składowe komponentu (do inspektora hierarchii). */
+  listMembers?(): MemberInfo[];
+}
+
+export interface MemberInfo {
+  name: string;
+  kind: "prop" | "method";
 }
 
 export interface RegisteredComponent {
@@ -24,16 +31,29 @@ export interface RegisteredComponent {
   bridge: ComponentBridge;
 }
 
+/** Węzeł hierarchii sceny — GameObject z jego komponentami (jak Unity). */
+export interface SceneObject {
+  id: number;
+  name: string;
+  comps: RegisteredComponent[];
+}
+
 export class WorldRegistry {
   private nextObjectId = 1;
   private nextCompId = 1;
   private components = new Map<number, RegisteredComponent>();
   private objectComps = new Map<number, Set<number>>();
+  private objectNames = new Map<number, string>();
 
-  spawnObject(): number {
+  spawnObject(name?: string): number {
     const id = this.nextObjectId++;
+    this.objectNames.set(id, name ?? `GameObject ${id}`);
     this.objectComps.set(id, new Set());
     return id;
+  }
+
+  objectName(id: number): string {
+    return this.objectNames.get(id) ?? `obj ${id}`;
   }
 
   attach(objectId: number, kind: string, lang: string, bridge: ComponentBridge): number {
@@ -89,14 +109,28 @@ export class WorldRegistry {
   destroyObject(objectId: number): void {
     for (const cid of this.objectComps.get(objectId) ?? []) this.components.delete(cid);
     this.objectComps.delete(objectId);
+    this.objectNames.delete(objectId);
   }
 
   clear(): void {
     this.components.clear();
     this.objectComps.clear();
+    this.objectNames.clear();
   }
 
   describe(): RegisteredComponent[] {
     return [...this.components.values()];
+  }
+
+  /** Hierarchia sceny: GameObject → komponenty (kolejność = kolejność spawnów). */
+  describeScene(): SceneObject[] {
+    const scene: SceneObject[] = [];
+    for (const [id, cids] of this.objectComps) {
+      const comps = [...cids]
+        .map((cid) => this.components.get(cid))
+        .filter((c): c is RegisteredComponent => c !== undefined);
+      scene.push({ id, name: this.objectName(id), comps });
+    }
+    return scene;
   }
 }

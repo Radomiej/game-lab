@@ -2,7 +2,7 @@
 # publiczne pola x/y/speed widoczne i zmieniane z innych języków.
 import random
 
-obj = lab.spawn()
+obj = lab.spawn("Scout")
 
 class Wanderer:
     def __init__(self):

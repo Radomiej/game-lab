@@ -1,5 +1,6 @@
 import type { LabHost, LabRuntime, RunRequest, RunResult } from "../core/protocol";
 import { createLabFacade } from "../core/host";
+import type { ComponentBridge } from "../core/world";
 
 // Pyodide = prawdziwy CPython skompilowany do WASM. Ładowany leniwie,
 // dopiero przy pierwszym uruchomieniu Pythona (~10–30 MB z CDN; do
@@ -49,8 +50,34 @@ export const pythonRuntime: LabRuntime = {
       // starsze wydania Pyodide — input() otworzy prompt() przeglądarki
     }
 
+    // Pomocnic do inspektora: publiczne składowe obiektu [nazwa, isCallable].
+    const membersFn = (await pyodide.runPythonAsync(
+      "lambda o: [[n, callable(getattr(o, n))] for n in dir(o) if not n.startswith('_')]",
+    )) as PyCallable;
+    const labForPy = {
+      ...lab,
+      attachComponent(objectId: number, kind: string, impl: Record<string, unknown>): number {
+        const bridge: ComponentBridge = {
+          get: (k) => impl[k],
+          set: (k, v) => {
+            impl[k] = v;
+          },
+          invoke: (m, args) => {
+            const fn = impl[m];
+            return typeof fn === "function" ? (fn as (...a: unknown[]) => unknown)(...args) : undefined;
+          },
+          listMembers: () =>
+            ((membersFn(impl) as { toJs(): [string, boolean][] }).toJs() ?? []).map(([name, isFn]) => ({
+              name,
+              kind: isFn ? ("method" as const) : ("prop" as const),
+            })),
+        };
+        return lab.attachBridge(objectId, kind, bridge);
+      },
+    };
+
     // świeży globals na każdy run + wystawiony moduł "lab"
-    const globals = pyodide.toPy({ lab: pyodide.toPy(lab) }) as {
+    const globals = pyodide.toPy({ lab: pyodide.toPy(labForPy) }) as {
       get(k: string): PyCallable | undefined;
     };
 

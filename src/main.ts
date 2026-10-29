@@ -97,27 +97,110 @@ function syncGutter(): void {
   gutterEl.scrollTop = editor.scrollTop;
 }
 
+// Hierarchia sceny jak w Unity: GameObject → komponenty → publiczne składowe.
+// Natywne <details>/<summary> = zwijanie z klawiatury i czytników za darmo.
+// Zwinięte węzły pamiętamy w setach — prze-renderowanie co 500 ms ich nie zamyka.
+const closedObjects = new Set<number>();
+const closedComps = new Set<number>();
+
+const LANG_COLORS: Record<string, string> = {
+  lua: "#e06c75",
+  python: "#61afef",
+  javascript: "#98c379",
+  typescript: "#4f9cf9",
+  cpp: "#f18e32",
+  csharp: "#b48ce0",
+  java: "#e76f00",
+};
+
+function fmtVal(v: unknown): string {
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : v.toFixed(1);
+  if (typeof v === "string") return JSON.stringify(v);
+  return String(v);
+}
+
 function refreshWorldPanel(): void {
-  const comps = host.world().describe();
-  worldCountEl.textContent = String(comps.length);
+  const scene = host.world().describeScene();
+  worldCountEl.textContent = String(scene.length);
   worldListEl.innerHTML = "";
-  if (comps.length === 0) {
-    const li = document.createElement("li");
-    li.className = "world-empty";
-    li.textContent = "brak komponentów — zarejestruj je przez lab.attachComponent";
-    worldListEl.appendChild(li);
+  if (scene.length === 0) {
+    const p = document.createElement("p");
+    p.className = "world-empty";
+    p.textContent = "scena pusta — zresp obiekt przez lab.spawn(\"nazwa\") i dodaj lab.attachComponent";
+    worldListEl.appendChild(p);
     return;
   }
-  for (const c of comps) {
-    const li = document.createElement("li");
-    const kind = document.createElement("span");
-    kind.className = "w-kind";
-    kind.textContent = c.kind;
-    const meta = document.createElement("span");
-    meta.className = "w-lang";
-    meta.textContent = `  ${c.lang} · obj ${c.objectId} · #${c.id}`;
-    li.append(kind, meta);
-    worldListEl.appendChild(li);
+  for (const obj of scene) {
+    const det = document.createElement("details");
+    det.className = "w-obj";
+    det.open = !closedObjects.has(obj.id);
+    det.addEventListener("toggle", () => {
+      if (det.open) closedObjects.delete(obj.id);
+      else closedObjects.add(obj.id);
+    });
+    const sum = document.createElement("summary");
+    const name = document.createElement("span");
+    name.className = "w-objname";
+    name.textContent = obj.name;
+    const oid = document.createElement("span");
+    oid.className = "w-oid";
+    oid.textContent = `obj ${obj.id}`;
+    sum.append(name, oid);
+    det.appendChild(sum);
+
+    for (const c of obj.comps) {
+      const cdet = document.createElement("details");
+      cdet.className = "w-comp";
+      cdet.open = !closedComps.has(c.id);
+      cdet.addEventListener("toggle", () => {
+        if (cdet.open) closedComps.delete(c.id);
+        else closedComps.add(c.id);
+      });
+      const csum = document.createElement("summary");
+      const kind = document.createElement("span");
+      kind.className = "w-kind";
+      kind.textContent = c.kind;
+      const lang = document.createElement("span");
+      lang.className = "w-lang";
+      lang.style.background = `${LANG_COLORS[c.lang] ?? "#7d93a5"}22`;
+      lang.style.color = LANG_COLORS[c.lang] ?? "#7d93a5";
+      lang.textContent = c.lang;
+      csum.append(kind, lang);
+      cdet.appendChild(csum);
+
+      const members = document.createElement("ul");
+      members.className = "w-members";
+      const listed = c.bridge.listMembers?.() ?? [];
+      for (const m of listed) {
+        const li = document.createElement("li");
+        const mn = document.createElement("span");
+        mn.className = m.kind === "method" ? "w-mname w-method" : "w-mname";
+        mn.textContent = m.kind === "method" ? `${m.name}()` : m.name;
+        li.appendChild(mn);
+        if (m.kind === "prop") {
+          const mv = document.createElement("span");
+          mv.className = "w-mval";
+          mv.textContent = `= ${fmtVal(c.bridge.get(m.name))}`;
+          li.appendChild(mv);
+        }
+        members.appendChild(li);
+      }
+      if (!listed.length) {
+        const li = document.createElement("li");
+        li.className = "w-mname";
+        li.textContent = "(brak publicznych składowych)";
+        members.appendChild(li);
+      }
+      cdet.appendChild(members);
+      det.appendChild(cdet);
+    }
+    if (!obj.comps.length) {
+      const p = document.createElement("p");
+      p.className = "w-nocomps";
+      p.textContent = "brak komponentów";
+      det.appendChild(p);
+    }
+    worldListEl.appendChild(det);
   }
 }
 setInterval(refreshWorldPanel, 500);

@@ -37,11 +37,14 @@ wywołania (`print`, `lab.drawRect`, `cin >>`…) na LRP i zwraca
   pętlę rAF, `dt` w sekundach z clamp 0.1 s (jak java-lab).
 - Fasada `lab.*`: `drawRect/Circle/Line/Text`, `clear`,
   `isKeyDown(code)`, `isKeyPressed(code)`, `width()`, `height()`.
-- **Interop**: `lab.spawn()`, `lab.attachComponent(obj, kind, impl)`,
+- **Interop**: `lab.spawn(name?)`, `lab.attachComponent(obj, kind, impl)`,
   `lab.getComponent(obj, kind)`, `lab.findComponent(kind)`,
   `lab.getProp(id, k)`, `lab.setProp(id, k, v)`, `lab.call(id, m, ...)`,
   `lab.worldInfo()`. Host tickuje `update(dt)` każdego komponentu
   co klatkę — niezależnie od języka, w którym został napisany.
+- **Hierarchia** (panel pod podglądem, jak Unity Hierarchy + Inspector):
+  GameObject → komponenty → publiczne pola z wartościami na żywo
+  i metody; węzły zwijane, badge pokazuje język komponentu.
 
 ## Interop w praktyce (zweryfikowane)
 
