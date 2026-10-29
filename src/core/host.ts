@@ -10,6 +10,11 @@ export class LabStop extends Error {
   }
 }
 
+/** Zlew konsoli — implementuje RuntimeConsole (forma jak w labach). */
+export interface ConsoleSink {
+  write(level: "log" | "sys" | "warn" | "error", text: string): void;
+}
+
 export class DomLabHost implements LabHost {
   private renderer: CanvasRenderer;
   private input = new InputTracker();
@@ -20,7 +25,7 @@ export class DomLabHost implements LabHost {
   private loopAbort: (() => void) | null = null;
 
   constructor(
-    private consoleEl: HTMLElement,
+    private consoleOut: ConsoleSink,
     private canvas: HTMLCanvasElement,
   ) {
     this.renderer = new CanvasRenderer(canvas.getContext("2d")!);
@@ -48,16 +53,11 @@ export class DomLabHost implements LabHost {
   }
 
   stdout(text: string): void {
-    this.consoleEl.appendChild(document.createTextNode(text));
-    this.consoleEl.scrollTop = this.consoleEl.scrollHeight;
+    this.consoleOut.write("log", text);
   }
 
   stderr(text: string): void {
-    const span = document.createElement("span");
-    span.className = "err";
-    span.textContent = text;
-    this.consoleEl.appendChild(span);
-    this.consoleEl.scrollTop = this.consoleEl.scrollHeight;
+    this.consoleOut.write("error", text);
   }
 
   draw(cmds: DrawCmd[]): void {
