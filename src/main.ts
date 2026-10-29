@@ -617,7 +617,7 @@ async function run(): Promise<void> {
       host,
     );
     term.write("sys", `\n[${res.status}]${res.message ? " " + res.message : ""}\n`);
-    term.setStatus(res.status === "ok" ? "ready" : "error");
+    term.setStatus(res.status === "error" ? "error" : "ready");
   } catch (err) {
     host.stderr(String(err) + "\n");
     term.setStatus("error");
