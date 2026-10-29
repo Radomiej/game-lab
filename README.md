@@ -11,7 +11,7 @@ protokół jest formalnie wydzielony i niezależny od języka.
 ```powershell
 cd C:\Nauka\lab-core
 npm install
-npm run dev        # http://127.0.0.1:5190
+npm run dev        # http://127.0.0.1:5191
 ```
 
 ## Warstwy
