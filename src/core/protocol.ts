@@ -12,12 +12,15 @@ export type DrawCmd =
   | { op: "rect"; x: number; y: number; w: number; h: number; color: string; fill?: boolean }
   | { op: "circle"; x: number; y: number; r: number; color: string; fill?: boolean }
   | { op: "line"; x1: number; y1: number; x2: number; y2: number; color: string; width?: number }
-  | { op: "text"; x: number; y: number; text: string; color: string; size?: number };
+  | { op: "text"; x: number; y: number; text: string; color: string; size?: number }
+  | { op: "image"; image: CanvasImageSource; x: number; y: number; w: number; h: number };
 
 export interface RunRequest {
   files: Record<string, string>;
   entry: string;
   stdin?: string;
+  /** Metoda wywoływana raz po załadowaniu kodu (ustawienia projektu). */
+  entryMethod?: string;
 }
 
 export type ExitStatus = "ok" | "compile-error" | "runtime-error" | "stopped";
@@ -49,6 +52,10 @@ export interface LabHost {
   startGameLoop(update: (dt: number) => void | Promise<void>, init?: () => void | Promise<void>): Promise<void>;
   /** Rejestr świata — interop GameObject/Component między językami. */
   world(): WorldRegistry;
+  /** Canvas podglądu — nakładki z pełnym silnikiem (GameLab) podpinają go pod run(). */
+  canvasEl?: HTMLCanvasElement;
+  /** Wywoływane przy Pauza/Wznów — silnik może zatrzymać własną pętlę. */
+  onPaused?: (paused: boolean) => void;
 }
 
 // To, co UI widzi jako jedną nakładkę językową.

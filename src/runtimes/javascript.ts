@@ -1,6 +1,7 @@
 import { transform } from "sucrase";
 import type { LabHost, LabRuntime, RunRequest, RunResult } from "../core/protocol";
 import { createLabFacade, LabStop } from "../core/host";
+import { createLabEngine, labEngineDisposed, type GameLabApi } from "../engine/index";
 
 // JavaScript/TypeScript: kod ucznia jest body funkcji; może zdefiniować
 // init() i update(dt) — wtedy host odpala pętlę. Bez nich: tryb konsoli.
@@ -49,21 +50,68 @@ function makeRuntime(id: "javascript" | "typescript", label: string, ts: boolean
         input: lab.input,
       };
 
-      let hooks: { init?: () => void; update?: (dt: number) => void };
+      // Pełny silnik z labów: GameLab.Game/GameObject/Component/Sprite —
+      // kod przekopiowany z web-learning-lab/java-lab działa 1:1.
+      const GameLab: GameLabApi | null = host.canvasEl ? createLabEngine(host.canvasEl) : null;
+
+      let hooks: { init?: () => void; update?: (dt: number) => void; getFn?: (n: string) => unknown };
       try {
         const factory = new Function(
           "lab",
           "console",
           "print",
           "input",
-          `"use strict";\n${source}\n;return { init: typeof init === "function" ? init : undefined, update: typeof update === "function" ? update : undefined };`,
-        ) as (lab: unknown, c: unknown, p: unknown, i: unknown) => typeof hooks;
-        hooks = factory(lab, stdio, lab.print, lab.input);
+          "GameLab",
+          `"use strict";\n${source}\n;return { init: typeof init === "function" ? init : undefined, update: typeof update === "function" ? update : undefined, getFn: (n) => { try { return eval("typeof " + n + " === 'function' ? " + n + " : undefined"); } catch { return undefined; } } };`,
+        ) as (lab: unknown, c: unknown, p: unknown, i: unknown, g: unknown) => typeof hooks;
+        hooks = factory(lab, stdio, lab.print, lab.input, GameLab);
       } catch (err) {
+        GameLab?.dispose();
+        labEngineDisposed();
         if (err instanceof SyntaxError) return { status: "compile-error", message: String(err) };
         if (err instanceof LabStop || aborted) return { status: "stopped" };
         host.stderr(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
         return { status: "runtime-error", message: String(err) };
+      }
+
+      // Metoda startowa z ustawień projektu — wywoływana raz po załadowaniu.
+      if (req.entryMethod) {
+        const boot = hooks?.getFn?.(req.entryMethod);
+        if (typeof boot === "function") {
+          try {
+            boot();
+          } catch (err) {
+            host.stderr(`[${req.entryMethod}] ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+        } else {
+          host.warn(`brak metody '${req.entryMethod}' — używam init()/update()\n`);
+        }
+      }
+
+      // Gra na silniku labów — własna pętla rAF + konsola LAB·BOY; nasza
+      // pętla trzyma tylko żywotność run() (STOP/restart/pauza z IDE).
+      const game = GameLab?.current;
+      if (game) {
+        const onEngineError = (e: Event) => {
+          const err = (e as ErrorEvent).error ?? e;
+          host.stderr(`[game] ${err instanceof Error ? err.message : String(err)}\n`);
+        };
+        window.addEventListener("error", onEngineError);
+        host.onPaused = (p) => {
+          if (p) game.pause();
+          else game.resume();
+        };
+        try {
+          await host.startGameLoop(() => {
+            if (aborted) throw new LabStop();
+          });
+        } finally {
+          window.removeEventListener("error", onEngineError);
+          host.onPaused = undefined;
+          GameLab!.dispose();
+          labEngineDisposed();
+        }
+        return { status: aborted ? "stopped" : "ok" };
       }
 
       if (hooks?.update) {

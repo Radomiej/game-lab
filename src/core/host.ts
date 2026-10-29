@@ -1,6 +1,8 @@
 import type { DrawCmd, LabHost } from "./protocol";
 import { CanvasRenderer, InputTracker } from "./engine";
 import { WorldRegistry, type ComponentBridge, type RegisteredComponent } from "./world";
+import { assetManifest } from "../engine/assets/Assets.js";
+import { userAssets } from "./userAssets";
 
 /** Wewnętrzny sygnał zatrzymania pętli — nie jest błędem ucznia. */
 export class LabStop extends Error {
@@ -28,8 +30,16 @@ export class DomLabHost implements LabHost {
   /** Callback ~1×/s z realnym FPS pętli gry (podgląd w IDE). */
   onFps: ((fps: number) => void) | null = null;
 
+  /** Canvas podglądu — silnik GameLab montuje na nim swój run(). */
+  get canvasEl(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
+  onPaused: ((paused: boolean) => void) | undefined;
+
   setPaused(paused: boolean): void {
     this.paused = paused;
+    this.onPaused?.(paused);
   }
   get isPaused(): boolean {
     return this.paused;
@@ -232,21 +242,29 @@ export function createLabFacade(host: LabHost, lang: string, ctx?: { files?: Rec
     listFiles(): string[] {
       return Object.keys(files);
     },
-    /** Wbudowany asset silnika (klucze jak w labach: player, coin…). */
-    asset(name: string): { key: string; colors: string[] } | null {
-      const a = LAB_ASSETS[name];
-      return a ? { key: name, colors: [...a.colors] } : null;
+    /** Asset silnika (manifest lab-game-v2) albo dropnięty plik użytkownika. */
+    asset(name: string): { key: string; kind: "engine" | "user"; w?: number; h?: number; colors?: string[] } | null {
+      const entry = assetManifest.assets.find((a) => a.key === name);
+      if (entry) return { key: name, kind: "engine", w: entry.frame.w, h: entry.frame.h, colors: LAB_ASSETS[name]?.colors };
+      const u = userAssets.get(name);
+      return u ? { key: name, kind: "user", w: u.w, h: u.h } : null;
     },
     listAssets(): string[] {
-      return Object.keys(LAB_ASSETS);
+      return [...assetManifest.assets.map((a) => a.key), ...userAssets.list().map((a) => a.key)];
     },
-    /** Placeholder sprite'a jak w labach: płatek + akcent z palety tekstury. */
+    /** Sprite: user-grafika rysuje się realnie, klucze silnika jako paleta-placeholder. */
     drawSprite(name: string, x: number, y: number, w = 32, h = 32): void {
+      const u = userAssets.get(name);
+      if (u?.image) {
+        host.draw([{ op: "image", image: u.image, x, y, w, h }]);
+        return;
+      }
       const a = LAB_ASSETS[name];
-      if (!a) return;
+      if (!a && !assetManifest.assets.some((e) => e.key === name)) return;
+      const [c1, c2] = a?.colors ?? ["#65d6c8", "#1d3a3f"];
       host.draw([
-        { op: "rect", x, y, w, h, color: a.colors[1] },
-        { op: "rect", x: x + w * 0.12, y: y + h * 0.12, w: w * 0.76, h: h * 0.76, color: a.colors[0] },
+        { op: "rect", x, y, w, h, color: c2 },
+        { op: "rect", x: x + w * 0.12, y: y + h * 0.12, w: w * 0.76, h: h * 0.76, color: c1 },
       ]);
     },
 

@@ -3,84 +3,154 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>lab-core — wielojęzykowy lab runtime</title>
+    <title>lab·core — game IDE</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23101c28'/%3E%3Crect x='3.5' y='3.5' width='9' height='9' rx='2' fill='none' stroke='%2313a89e' stroke-width='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.8' fill='%2365d6c8'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/ui/style.css" />
   </head>
   <body>
     <header id="topbar">
       <span class="brand">lab<span class="brand-accent">·</span>core</span>
-      <label class="field">
-        <span class="field-label">Język</span>
-        <select id="lang"></select>
-      </label>
-      <label class="field">
-        <span class="field-label">Przykład</span>
-        <select id="example"></select>
-      </label>
       <div class="topbar-actions">
-        <button id="run" class="btn btn-primary" title="Uruchom kod (Ctrl+Enter)">
+        <button id="run" class="btn btn-primary" title="Uruchom projekt (Ctrl+Enter)">
           <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
           Run
         </button>
-        <button id="stop" class="btn btn-ghost btn-danger" disabled>
+        <button id="stop" class="btn btn-ghost btn-danger" disabled title="Zatrzymaj">
           <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="currentColor"/></svg>
           Stop
         </button>
-        <button id="clear-world" class="btn btn-ghost" title="Usuwa wszystkie zarejestrowane komponenty (interop)">Wyczyść świat</button>
+        <button id="clear-all" class="icon-btn" title="Wyczyść konsolę i świat" aria-label="Wyczyść konsolę i świat">
+          <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+        <button id="settings-btn" class="icon-btn" title="Ustawienia projektu" aria-label="Ustawienia projektu">
+          <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.04-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.04 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.05a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.04z"/></svg>
+        </button>
       </div>
     </header>
     <main>
-      <section class="editor-shell" aria-label="Edytor kodu">
-        <aside id="project" aria-label="Pliki projektu i assety"></aside>
-        <div class="editor-col">
-          <div id="file-tabs" role="tablist" aria-label="Pliki"></div>
-          <div class="editor-body">
-            <pre id="gutter" class="gutter" aria-hidden="true"></pre>
-            <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Kod źródłowy"></textarea>
-          </div>
-          <section class="runtime-console" aria-labelledby="console-title">
-            <div class="console-heading">
-              <button id="console-toggle" class="console-fold" aria-expanded="true" aria-controls="console" title="Zwiń/rozwiń konsolę" aria-label="Zwiń/rozwiń konsolę">
-                <svg class="console-chevron" viewBox="0 0 10 6" width="10" height="6" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
-              </button>
-              <h2 id="console-title">Konsola</h2>
-              <input id="stdin" class="stdin-input" type="text" placeholder="stdin dla input() / cin — \n jako nowa linia" aria-label="Standardowe wejście programu" />
-              <div class="console-actions">
-                <button id="cc-copy" class="icon-btn" title="Kopiuj wynik konsoli" aria-label="Kopiuj wynik konsoli">
-                  <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h1"/></svg>
-                </button>
-                <button id="cc-ws" class="icon-btn" aria-pressed="false" title="Pokaż białe znaki" aria-label="Pokaż białe znaki">
-                  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><text x="5" y="18" font-size="16" fill="currentColor" font-family="Georgia,serif">¶</text></svg>
-                </button>
-                <button id="cc-clear" class="icon-btn" title="Wyczyść konsolę" aria-label="Wyczyść konsolę">
-                  <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg>
-                </button>
-                <span id="copy-status" class="copy-status" aria-live="polite"></span>
-              </div>
-              <span id="status-pill" class="runtime-pill runtime-pill--idle" role="status">Czeka</span>
+      <aside id="project" aria-label="Projekt: pliki, assety, dźwięki"></aside>
+      <div class="pane-resizer" id="rs-left" role="separator" aria-orientation="vertical" aria-label="Zmień szerokość panelu projektu" title="Przeciągnij, by zmienić szerokość"></div>
+      <div class="center-col">
+        <div id="view-tabs" role="tablist" aria-label="Otwarte widoki"></div>
+        <section id="view-root">
+          <div class="view view-editor" data-view="files">
+            <div class="editor-body">
+              <pre id="gutter" class="gutter" aria-hidden="true"></pre>
+              <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Kod źródłowy"></textarea>
             </div>
-            <pre id="console" class="console-output" tabindex="0" aria-label="Wynik programu i komunikaty"></pre>
-          </section>
-        </div>
-      </section>
-      <aside class="preview-pane" aria-label="Podgląd">
-        <div class="preview-heading">
-          <h2>Podgląd</h2>
-          <div class="preview-actions">
-            <span id="fps" class="fps" title="Klatki na sekundę">— fps</span>
-            <button id="pause" class="btn btn-mini" disabled title="Pauza/wznów pętlę gry">Pauza</button>
-            <button id="restart" class="btn btn-mini" disabled title="Uruchom ponownie od zera">Restart</button>
-            <span class="preview-hint">kliknij canvas, steruj klawiaturą</span>
           </div>
-        </div>
-        <canvas id="canvas" width="640" height="360" tabindex="0"></canvas>
+          <div class="view view-emulator" data-view="emulator" hidden>
+            <div class="emulator-toolbar">
+              <span id="fps" class="fps" title="Klatki na sekundę">— fps</span>
+              <button id="pause" class="btn btn-mini" disabled title="Pauza/wznów pętlę gry">Pauza</button>
+              <button id="restart" class="btn btn-mini" disabled title="Uruchom ponownie od zera">Restart</button>
+              <span class="preview-hint">kliknij ekran, steruj klawiaturą lub padem</span>
+              <span class="zoom-ctl" role="group" aria-label="Powiększenie emulatora">
+                <button id="zoom-out" class="btn btn-mini" title="Pomniejsz (Ctrl+kółko)">−</button>
+                <span id="zoom-label" class="fps" title="Powiększenie">auto</span>
+                <button id="zoom-in" class="btn btn-mini" title="Powiększ (Ctrl+kółko)">+</button>
+                <button id="zoom-fit" class="btn btn-mini" title="Dopasuj do widoku">Dopasuj</button>
+              </span>
+            </div>
+            <div class="emu-stage" id="emu-stage">
+            <div class="lab-console">
+              <div class="lab-console-shell">
+                <div class="lab-console-brand">LAB·BOY</div>
+                <div class="lab-console-screen">
+                  <canvas id="canvas" width="640" height="480" tabindex="0"></canvas>
+                  <div class="lab-boot emu-idle" id="emu-idle"><span class="lab-boot-logo">LAB·BOY</span><span class="emu-hint">RUN uruchamia grę</span></div>
+                </div>
+                <div class="lab-console-stats">
+                  <span data-stat="fps"><b>0</b> fps</span>
+                  <span data-stat="avg"><b>0.0</b> ms śr.</span>
+                  <span data-stat="max"><b>0</b> ms max</span>
+                  <span class="lab-console-keys" data-stat="keys"></span>
+                </div>
+                <div class="lab-console-pad">
+                  <div class="lab-sys">
+                    <button type="button" class="lab-pill" data-wasd aria-pressed="false" title="Krzyżak steruje W A S D">WASD</button>
+                    <button type="button" class="lab-pill" data-action="select">SELECT</button>
+                    <button type="button" class="lab-pill" data-action="start">START</button>
+                  </div>
+                  <div class="lab-pad-row">
+                    <div class="lab-dpad">
+                      <button type="button" data-dir="up" aria-label="W górę">▲</button>
+                      <button type="button" data-dir="left" aria-label="W lewo">◀</button>
+                      <span class="lab-dpad-hub" aria-hidden="true"></span>
+                      <button type="button" data-dir="right" aria-label="W prawo">▶</button>
+                      <button type="button" data-dir="down" aria-label="W dół">▼</button>
+                    </div>
+                    <div class="lab-actions">
+                      <button type="button" data-action="x"><span>X</span></button>
+                      <button type="button" data-action="a"><span>A</span></button>
+                      <button type="button" data-action="y"><span>Y</span></button>
+                      <button type="button" data-action="b"><span>B</span></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </div>
+          </div>
+          <div class="view view-scene" data-view="scene" hidden>
+            <div class="scene-toolbar">
+              <h2 class="view-title">Scene View</h2>
+              <span class="preview-hint">przeciągnij = przesuń · kółko = zoom · dwuklik = dopasuj</span>
+            </div>
+            <canvas id="scene-view" aria-label="Podgląd całej sceny"></canvas>
+          </div>
+          <div class="view view-asset" data-view="asset" hidden></div>
+          <div class="view view-sounds" data-view="sounds" hidden></div>
+        </section>
+        <div class="pane-resizer rs-y" id="rs-console" role="separator" aria-orientation="horizontal" aria-label="Zmień wysokość konsoli" title="Przeciągnij, by zmienić wysokość konsoli"></div>
+        <section class="runtime-console" aria-labelledby="console-title">
+          <div class="console-heading">
+            <button id="console-toggle" class="console-fold" aria-expanded="true" aria-controls="console" title="Zwiń/rozwiń konsolę" aria-label="Zwiń/rozwiń konsolę">
+              <svg class="console-chevron" viewBox="0 0 10 6" width="10" height="6" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            </button>
+            <h2 id="console-title">Konsola</h2>
+            <input id="stdin" class="stdin-input" type="text" placeholder="stdin dla input() / cin — \n jako nowa linia" aria-label="Standardowe wejście programu" />
+            <div class="console-actions">
+              <button id="cc-copy" class="icon-btn" title="Kopiuj wynik konsoli" aria-label="Kopiuj wynik konsoli">
+                <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h1"/></svg>
+              </button>
+              <button id="cc-ws" class="icon-btn" aria-pressed="false" title="Pokaż białe znaki" aria-label="Pokaż białe znaki">
+                <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><text x="5" y="18" font-size="16" fill="currentColor" font-family="Georgia,serif">¶</text></svg>
+              </button>
+              <button id="cc-clear" class="icon-btn" title="Wyczyść konsolę" aria-label="Wyczyść konsolę">
+                <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg>
+              </button>
+              <span id="copy-status" class="copy-status" aria-live="polite"></span>
+            </div>
+            <span id="status-pill" class="runtime-pill runtime-pill--idle" role="status">Czeka</span>
+          </div>
+          <pre id="console" class="console-output" tabindex="0" aria-label="Wynik programu i komunikaty"></pre>
+        </section>
+      </div>
+      <aside class="right-pane" aria-label="Hierarchia sceny">
         <div class="world-panel">
           <h3>Hierarchia <span id="world-count" class="world-count">0</span></h3>
           <div id="world-list" class="world-list" aria-live="polite"></div>
         </div>
       </aside>
     </main>
+    <dialog id="settings-modal" aria-labelledby="settings-title">
+      <form method="dialog" class="settings-form">
+        <h2 id="settings-title">Ustawienia projektu</h2>
+        <label class="set-row">
+          <span>Plik startowy</span>
+          <select id="set-entry"></select>
+        </label>
+        <label class="set-row">
+          <span>Metoda startowa</span>
+          <input id="set-method" type="text" placeholder="puste = init()/update() lub GameLab.run" />
+        </label>
+        <p class="set-hint">Metoda wywoływana raz po załadowaniu kodu (np. <code>start</code>). Puste = automatycznie: <code>init()</code>+<code>update()</code> albo <code>GameLab.run(Klasa)</code>.</p>
+        <div class="set-actions">
+          <button id="set-save" class="btn btn-primary" value="save">Zapisz</button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

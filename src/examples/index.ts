@@ -23,6 +23,13 @@ export const examples: LabExample[] = [
     },
   },
   {
+    id: "js-labgame",
+    label: "Gra: silnik labów (LAB·BOY)",
+    runtime: "javascript",
+    entry: "main.js",
+    files: { "main.js": content("js-labgame.js") },
+  },
+  {
     id: "js-game",
     label: "Gra: monety",
     runtime: "javascript",

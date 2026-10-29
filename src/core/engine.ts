@@ -44,6 +44,10 @@ export class CanvasRenderer {
           ctx.font = `${c.size ?? 16}px monospace`;
           ctx.fillText(c.text, c.x, c.y);
           break;
+        case "image":
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(c.image, c.x, c.y, c.w, c.h);
+          break;
       }
     }
   }
