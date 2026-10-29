@@ -45,6 +45,21 @@ wywołania (`print`, `lab.drawRect`, `cin >>`…) na LRP i zwraca
 - **Hierarchia** (panel pod podglądem, jak Unity Hierarchy + Inspector):
   GameObject → komponenty → publiczne pola z wartościami na żywo
   i metody; węzły zwijane, badge pokazuje język komponentu.
+- **Project** (lewy panel, jak Unity Project): pliki projektu
+  pogrupowane w foldery (`assets/…` → sekcja Assets), nowy/usuń/
+  zmień nazwę/★ plik startowy; sekcja "Assets silnika" z wbudowanymi
+  assetami — klik wstawia `lab.asset("klucz")` do edytora.
+- **Playground**: projekt = wiele plików. W JS/TS pliki nie-startowe
+  doklejane są przed startowy (helpers → main), więc funkcje/klasy
+  pomocnicze są widoczne w entry. `lab.readFile(name)` czyta pliki
+  projektu (np. `assets/palette.json`), `lab.asset/drawSprite`
+  używają wbudowanych tekstur z palety labów (player, coin…).
+- **Konsola** (API jak RuntimeConsole z labów): linie `> `/`⚠ `/`Błąd: `,
+  pill Czeka/Ładuję/Działa/Gotowe/Błąd; przyciski: kopiuj wynik
+  (wzorzec CopyCodeButton), "Pokaż białe znaki" (· ⇥ ↵ jak
+  ConsoleOutput z java-lab), wyczyść, zwijanie. `console.log/info/
+  warn/error` mapowane jak w labach — kod skopiowany z web-lab
+  wypisuje się identycznie.
 
 ## Interop w praktyce (zweryfikowane)
 

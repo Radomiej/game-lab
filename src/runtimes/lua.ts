@@ -36,7 +36,7 @@ export const luaRuntime: LabRuntime = {
     if (source == null) return { status: "compile-error", message: `brak pliku ${req.entry}` };
     const st = engine;
 
-    const lab = createLabFacade(host, "lua");
+    const lab = createLabFacade(host, "lua", { files: req.files });
 
     // attachComponent: tabela Lua przychodzi jako proxy — mostek
     // woła metody z self na pierwszym argumencie (konwencja `:`).

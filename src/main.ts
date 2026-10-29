@@ -1,5 +1,6 @@
-import { DomLabHost } from "./core/host";
+import { DomLabHost, LAB_ASSETS } from "./core/host";
 import { RuntimeConsole } from "./ui/console";
+import { ProjectPanel } from "./ui/project";
 import { runtimes } from "./runtimes";
 import { examples } from "./examples";
 
@@ -19,6 +20,11 @@ const restartBtn = $<HTMLButtonElement>("#restart");
 const fpsEl = $("#fps");
 const consoleToggle = $<HTMLButtonElement>("#console-toggle");
 const consoleSection = document.querySelector(".runtime-console") as HTMLElement;
+const projectEl = $<HTMLElement>("#project");
+const copyBtn = $<HTMLButtonElement>("#cc-copy");
+const wsBtn = $<HTMLButtonElement>("#cc-ws");
+const ccClearBtn = $<HTMLButtonElement>("#cc-clear");
+const copyStatus = $("#copy-status");
 const editor = $<HTMLTextAreaElement>("#editor");
 const gutterEl = $("#gutter");
 const tabsEl = $("#file-tabs");
@@ -66,7 +72,76 @@ function loadExample(id?: string): void {
   renderTabs();
   editor.value = currentFiles[openFile] ?? "";
   syncGutter();
+  renderProject();
 }
+
+function renderProject(): void {
+  project.setState({
+    files: Object.keys(currentFiles),
+    entry: entryFile,
+    open: openFile,
+    builtinAssets: Object.keys(LAB_ASSETS),
+  });
+}
+
+function openInEditor(name: string): void {
+  currentFiles[openFile] = editor.value;
+  openFile = name;
+  editor.value = currentFiles[name] ?? "";
+  syncGutter();
+  renderTabs();
+  renderProject();
+  editor.focus();
+}
+
+function insertAtCursor(snippet: string): void {
+  const s = editor.selectionStart;
+  editor.value = editor.value.slice(0, s) + snippet + editor.value.slice(editor.selectionEnd);
+  editor.selectionStart = editor.selectionEnd = s + snippet.length;
+  currentFiles[openFile] = editor.value;
+  syncGutter();
+  editor.focus();
+}
+
+const project = new ProjectPanel(projectEl, {
+  onSelect(name) {
+    if (name.startsWith("asset:")) {
+      insertAtCursor(`lab.asset(${JSON.stringify(name.slice(6))})`);
+      return;
+    }
+    openInEditor(name);
+  },
+  onAdd() {
+    const defExt = currentRuntime.extensions[0] ?? "js";
+    const name = prompt(`Nazwa nowego pliku (np. utils.${defExt}):`, `utils.${defExt}`)?.trim();
+    if (!name || currentFiles[name] !== undefined) return;
+    currentFiles[name] = "// nowy plik\n";
+    renderTabs();
+    renderProject();
+  },
+  onRename(name) {
+    const next = prompt("Nowa nazwa pliku:", name)?.trim();
+    if (!next || next === name || currentFiles[next] !== undefined) return;
+    currentFiles[next] = currentFiles[name];
+    delete currentFiles[name];
+    if (entryFile === name) entryFile = next;
+    if (openFile === name) openFile = next;
+    renderTabs();
+    renderProject();
+  },
+  onDelete(name) {
+    if (name === entryFile) return;
+    delete currentFiles[name];
+    if (openFile === name) openInEditor(entryFile);
+    renderTabs();
+    renderProject();
+  },
+  onSetEntry(name) {
+    entryFile = name;
+    renderProject();
+    term.write("sys", `plik startowy: ${name}\n`);
+  },
+});
 
 function renderTabs(): void {
   tabsEl.innerHTML = "";
@@ -314,6 +389,24 @@ consoleToggle.onclick = () => {
   const collapsed = consoleSection.classList.toggle("collapsed");
   consoleToggle.setAttribute("aria-expanded", String(!collapsed));
 };
+let copyTimer = 0;
+copyBtn.onclick = async () => {
+  // wzorzec CopyCodeButton z shared/lab-game-v2: status obok przycisku
+  try {
+    await navigator.clipboard.writeText(term.getText());
+    copyStatus.textContent = "Skopiowano kod";
+  } catch {
+    copyStatus.textContent = "Zaznacz i użyj Ctrl+C.";
+  }
+  clearTimeout(copyTimer);
+  copyTimer = window.setTimeout(() => (copyStatus.textContent = ""), 1600);
+};
+wsBtn.onclick = () => {
+  const on = term.toggleWhitespace();
+  wsBtn.setAttribute("aria-pressed", String(on));
+  wsBtn.classList.toggle("on", on);
+};
+ccClearBtn.onclick = () => term.clear();
 clearBtn.onclick = () => {
   host.clearWorld();
   refreshWorldPanel();

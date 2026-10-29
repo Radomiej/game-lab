@@ -12,6 +12,17 @@ const content = (path: string) => raw[`./files/${path}`]!;
 
 export const examples: LabExample[] = [
   {
+    id: "js-playground",
+    label: "Playground",
+    runtime: "javascript",
+    entry: "main.js",
+    files: {
+      "main.js": content("pg-main.js"),
+      "helpers.js": content("pg-helpers.js"),
+      "assets/palette.json": content("pg-palette.json"),
+    },
+  },
+  {
     id: "js-game",
     label: "Gra: monety",
     runtime: "javascript",

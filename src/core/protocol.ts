@@ -31,6 +31,8 @@ export interface RunResult {
 export interface LabHost {
   stdout(text: string): void;
   stderr(text: string): void;
+  /** Linia ostrzeżenia (console.warn) — renderowana jak warn w labach. */
+  warn(text: string): void;
   draw(cmds: DrawCmd[]): void;
   isKeyDown(code: string): boolean;
   /** Kody klawiszy wciśnięte od ostatniej klatki (konsumowane przy odczycie). */

@@ -41,7 +41,7 @@ export const pythonRuntime: LabRuntime = {
     const source = req.files[req.entry];
     if (source == null) return { status: "compile-error", message: `brak pliku ${req.entry}` };
 
-    const lab = createLabFacade(host, "python");
+    const lab = createLabFacade(host, "python", { files: req.files });
     pyodide.setStdout({ batched: (line) => host.stdout(line + "\n") });
     pyodide.setStderr({ batched: (line) => host.stderr(line + "\n") });
     try {

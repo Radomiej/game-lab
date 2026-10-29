@@ -4,6 +4,9 @@ import { createLabFacade, LabStop } from "../core/host";
 
 // JavaScript/TypeScript: kod ucznia jest body funkcji; może zdefiniować
 // init() i update(dt) — wtedy host odpala pętlę. Bez nich: tryb konsoli.
+// Playground: wszystkie pliki tego samego rozszerzenia sklejone są w jedną
+// jednostkę — nie-startowe najpierw (helpers, klasy), plik startowy na końcu,
+// więc jego init()/update() wygrywa. console.* mapowane jak w labach.
 // main-thread = ograniczenie POC; docelowo Web Worker jak w java-lab.
 function makeRuntime(id: "javascript" | "typescript", label: string, ts: boolean): LabRuntime {
   let aborted = false;
@@ -15,8 +18,15 @@ function makeRuntime(id: "javascript" | "typescript", label: string, ts: boolean
 
     async run(req: RunRequest, host: LabHost): Promise<RunResult> {
       aborted = false;
-      let source = req.files[req.entry];
-      if (source == null) return { status: "compile-error", message: `brak pliku ${req.entry}` };
+      const entrySrc = req.files[req.entry];
+      if (entrySrc == null) return { status: "compile-error", message: `brak pliku ${req.entry}` };
+
+      const exts = ts ? [".ts"] : [".js", ".mjs"];
+      const isCode = (n: string) => exts.some((e) => n.endsWith(e));
+      const helpers = Object.keys(req.files).filter((n) => n !== req.entry && isCode(n));
+      let source = [...helpers, req.entry]
+        .map((n) => `// ==== ${n} ====\n${req.files[n]}`)
+        .join("\n");
 
       if (ts) {
         try {
@@ -26,8 +36,18 @@ function makeRuntime(id: "javascript" | "typescript", label: string, ts: boolean
         }
       }
 
-      const lab = createLabFacade(host, id);
-      const stdio = { log: lab.print, input: lab.input };
+      const lab = createLabFacade(host, id, { files: req.files });
+      // console.* jak w labach: log/info/debug → "> ", warn → "⚠ ", error → "Błąd: "
+      const join = (args: unknown[]) =>
+        args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ") + "\n";
+      const stdio = {
+        log: (...a: unknown[]) => host.stdout(join(a)),
+        info: (...a: unknown[]) => host.stdout(join(a)),
+        debug: (...a: unknown[]) => host.stdout(join(a)),
+        warn: (...a: unknown[]) => host.warn(join(a)),
+        error: (...a: unknown[]) => host.stderr(join(a)),
+        input: lab.input,
+      };
 
       let hooks: { init?: () => void; update?: (dt: number) => void };
       try {

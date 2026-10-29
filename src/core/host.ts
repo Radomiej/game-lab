@@ -72,6 +72,10 @@ export class DomLabHost implements LabHost {
     this.consoleOut.write("error", text);
   }
 
+  warn(text: string): void {
+    this.consoleOut.write("warn", text);
+  }
+
   draw(cmds: DrawCmd[]): void {
     this.renderer.draw(cmds);
   }
@@ -162,12 +166,29 @@ export class DomLabHost implements LabHost {
   }
 }
 
+// Wbudowane assety silnika — paleta kolorów tekstur przeniesiona z
+// shared/lab-game-v2 (te same klucze, które znają uczniowie z labów).
+// drawSprite rysuje dwukolorowy placeholder sprite'a: tło + akcent.
+export const LAB_ASSETS: Record<string, { colors: [string, string] }> = {
+  player: { colors: ["#76b9f2", "#17324d"] },
+  slime: { colors: ["#70c994", "#123c2c"] },
+  bat: { colors: ["#a98bd5", "#392c59"] },
+  ghost: { colors: ["#c3edf2", "#527783"] },
+  gem: { colors: ["#ffd166", "#9b631c"] },
+  coin: { colors: ["#ffd166", "#9b631c"] },
+  chest: { colors: ["#b77932", "#603b22"] },
+  projectile: { colors: ["#8be9fd", "#ffffff"] },
+  heart: { colors: ["#ef6a78", "#7d2938"] },
+  wall: { colors: ["#889aa9", "#405563"] },
+};
+
 // Fasada "lab" wystawiana kodowi ucznia — ta sama w każdym języku.
 // Nakładka mapuje ją na natywne API (globalne funkcje, moduł, header itd.).
 // Interop: komponenty rejestrowane przez dowolny język są widoczne
 // i wywoływalne z pozostałych — registry żyje w hoście, nie w runtime.
-export function createLabFacade(host: LabHost, lang: string) {
+export function createLabFacade(host: LabHost, lang: string, ctx?: { files?: Record<string, string> }) {
   const world = host.world();
+  const files = ctx?.files ?? {};
   const lab = {
     print(...args: unknown[]) {
       host.stdout(args.map(String).join(" ") + "\n");
@@ -201,6 +222,32 @@ export function createLabFacade(host: LabHost, lang: string) {
     },
     height() {
       return host.height();
+    },
+
+    // ---- Pliki i assety projektu (playground à la laby) ----
+    /** Treść pliku z projektu (np. assets/palette.json) albo null. */
+    readFile(name: string): string | null {
+      return files[name] ?? null;
+    },
+    listFiles(): string[] {
+      return Object.keys(files);
+    },
+    /** Wbudowany asset silnika (klucze jak w labach: player, coin…). */
+    asset(name: string): { key: string; colors: string[] } | null {
+      const a = LAB_ASSETS[name];
+      return a ? { key: name, colors: [...a.colors] } : null;
+    },
+    listAssets(): string[] {
+      return Object.keys(LAB_ASSETS);
+    },
+    /** Placeholder sprite'a jak w labach: płatek + akcent z palety tekstury. */
+    drawSprite(name: string, x: number, y: number, w = 32, h = 32): void {
+      const a = LAB_ASSETS[name];
+      if (!a) return;
+      host.draw([
+        { op: "rect", x, y, w, h, color: a.colors[1] },
+        { op: "rect", x: x + w * 0.12, y: y + h * 0.12, w: w * 0.76, h: h * 0.76, color: a.colors[0] },
+      ]);
     },
 
     // ---- Interop: GameObject + Component na handle'ach ----

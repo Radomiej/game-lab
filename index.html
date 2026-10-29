@@ -32,22 +32,37 @@
     </header>
     <main>
       <section class="editor-shell" aria-label="Edytor kodu">
-        <div id="file-tabs" role="tablist" aria-label="Pliki"></div>
-        <div class="editor-body">
-          <pre id="gutter" class="gutter" aria-hidden="true"></pre>
-          <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Kod źródłowy"></textarea>
-        </div>
-        <section class="runtime-console" aria-labelledby="console-title">
-          <button id="console-toggle" class="console-heading" aria-expanded="true" aria-controls="console">
-            <h2 id="console-title">Konsola</h2>
-            <div class="console-heading-side">
-              <input id="stdin" class="stdin-input" type="text" placeholder="stdin dla input() / cin — \n jako nowa linia" aria-label="Standardowe wejście programu" onclick="event.stopPropagation()" />
+        <aside id="project" aria-label="Pliki projektu i assety"></aside>
+        <div class="editor-col">
+          <div id="file-tabs" role="tablist" aria-label="Pliki"></div>
+          <div class="editor-body">
+            <pre id="gutter" class="gutter" aria-hidden="true"></pre>
+            <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Kod źródłowy"></textarea>
+          </div>
+          <section class="runtime-console" aria-labelledby="console-title">
+            <div class="console-heading">
+              <button id="console-toggle" class="console-fold" aria-expanded="true" aria-controls="console" title="Zwiń/rozwiń konsolę" aria-label="Zwiń/rozwiń konsolę">
+                <svg class="console-chevron" viewBox="0 0 10 6" width="10" height="6" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+              </button>
+              <h2 id="console-title">Konsola</h2>
+              <input id="stdin" class="stdin-input" type="text" placeholder="stdin dla input() / cin — \n jako nowa linia" aria-label="Standardowe wejście programu" />
+              <div class="console-actions">
+                <button id="cc-copy" class="icon-btn" title="Kopiuj wynik konsoli" aria-label="Kopiuj wynik konsoli">
+                  <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h1"/></svg>
+                </button>
+                <button id="cc-ws" class="icon-btn" aria-pressed="false" title="Pokaż białe znaki" aria-label="Pokaż białe znaki">
+                  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><text x="5" y="18" font-size="16" fill="currentColor" font-family="Georgia,serif">¶</text></svg>
+                </button>
+                <button id="cc-clear" class="icon-btn" title="Wyczyść konsolę" aria-label="Wyczyść konsolę">
+                  <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg>
+                </button>
+                <span id="copy-status" class="copy-status" aria-live="polite"></span>
+              </div>
               <span id="status-pill" class="runtime-pill runtime-pill--idle" role="status">Czeka</span>
-              <svg class="console-chevron" viewBox="0 0 10 6" width="10" height="6" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
             </div>
-          </button>
-          <pre id="console" class="console-output" tabindex="0" aria-label="Wynik programu i komunikaty"></pre>
-        </section>
+            <pre id="console" class="console-output" tabindex="0" aria-label="Wynik programu i komunikaty"></pre>
+          </section>
+        </div>
       </section>
       <aside class="preview-pane" aria-label="Podgląd">
         <div class="preview-heading">
