@@ -5,6 +5,7 @@ import { pythonRuntime } from "./python";
 import { cppRuntime } from "./cpp";
 import { csharpRuntime } from "./csharp";
 import { javaRuntime } from "./java";
+import { phpRuntime } from "./php";
 import { luauRuntime } from "./stubbed";
 
 export const runtimes: LabRuntime[] = [
@@ -16,4 +17,5 @@ export const runtimes: LabRuntime[] = [
   cppRuntime,
   csharpRuntime,
   javaRuntime,
+  phpRuntime,
 ];

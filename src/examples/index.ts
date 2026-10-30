@@ -109,6 +109,27 @@ export const examples: LabExample[] = [
     files: { "main.cpp": content("cpp-console.cpp") },
   },
   {
+    id: "cpp-interop",
+    label: "Interop: wspólna scena (lab.h)",
+    runtime: "cpp",
+    entry: "main.cpp",
+    files: { "main.cpp": content("cpp-interop.cpp") },
+  },
+  {
+    id: "php-console",
+    label: "Konsola",
+    runtime: "php",
+    entry: "index.php",
+    files: { "index.php": content("php-console.php") },
+  },
+  {
+    id: "php-interop",
+    label: "Interop: wspólna scena (Lab::)",
+    runtime: "php",
+    entry: "index.php",
+    files: { "index.php": content("php-interop.php") },
+  },
+  {
     id: "java-game",
     label: "Gra: monety (TeaVM)",
     runtime: "java",
@@ -135,5 +156,12 @@ export const examples: LabExample[] = [
     runtime: "csharp",
     entry: "Program.cs",
     files: { "Program.cs": content("cs-console.cs") },
+  },
+  {
+    id: "cs-interop",
+    label: "Interop: wspólna scena (Lab.*)",
+    runtime: "csharp",
+    entry: "Program.cs",
+    files: { "Program.cs": content("cs-interop.cs") },
   },
 ];

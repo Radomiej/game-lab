@@ -9,6 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@php-wasm/universal": "^3.1.52",
+    "@php-wasm/web": "^3.1.52",
+    "@php-wasm/web-8-4": "^3.1.52",
     "@wasmsharp/core": "^0.10.2",
     "comlink": "^4.4.2",
     "JSCPP": "^2.0.9",

@@ -43,6 +43,7 @@ const EXT_BADGE: Record<string, { tag: string; color: string }> = {
   h: { tag: "h", color: "#c98fbf" },
   cs: { tag: "C#", color: "#b48ce0" },
   java: { tag: "Jv", color: "#e76f00" },
+  php: { tag: "Php", color: "#8892bf" },
   json: { tag: "{}", color: "#8be9fd" },
   txt: { tag: "Tx", color: "#9fb3c4" },
   md: { tag: "Md", color: "#9fb3c4" },
@@ -60,6 +61,7 @@ export const NEW_FILE_LANGS: Array<{ ext: string; label: string }> = [
   { ext: "cpp", label: "C++" },
   { ext: "cs", label: "C#" },
   { ext: "java", label: "Java" },
+  { ext: "php", label: "PHP" },
   { ext: "json", label: "JSON" },
   { ext: "txt", label: "Tekst" },
 ];
