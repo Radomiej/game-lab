@@ -56,6 +56,8 @@ export interface LabHost {
   canvasEl?: HTMLCanvasElement;
   /** Wywoływane przy Pauza/Wznów — silnik może zatrzymać własną pętlę. */
   onPaused?: (paused: boolean) => void;
+  /** Nakładka może raportować realny FPS własnej pętli (~1×/s). */
+  onFps?: (fps: number) => void;
 }
 
 // To, co UI widzi jako jedną nakładkę językową.

@@ -14,15 +14,6 @@ function planned(id: string, label: string, exts: string[], plan: string): LabRu
   };
 }
 
-export const javaRuntime = planned(
-  "java",
-  "Java",
-  ["java"],
-  "Slot: worker + TeaVM. Gotowe assety w C:\\Nauka\\java-lab\\public\\vendor\\teavm\n" +
-    "(compiler.wasm ~4 MB, classlib, teavm.worker.js). Nakładka = przeniesienie\n" +
-    "teavmRunner.js i mapowanie komend draw na protokół z core/protocol.ts.",
-);
-
 export const luauRuntime = planned(
   "luau",
   "Luau (Roblox)",

@@ -4,7 +4,8 @@ import { luaRuntime } from "./lua";
 import { pythonRuntime } from "./python";
 import { cppRuntime } from "./cpp";
 import { csharpRuntime } from "./csharp";
-import { javaRuntime, luauRuntime } from "./stubbed";
+import { javaRuntime } from "./java";
+import { luauRuntime } from "./stubbed";
 
 export const runtimes: LabRuntime[] = [
   javascriptRuntime,

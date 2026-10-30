@@ -603,6 +603,7 @@ async function run(): Promise<void> {
   const stdin = stdinEl.value.split("\\n").join("\n");
   canvas.width = 640;
   canvas.height = 480;
+  canvas.closest(".lab-console-screen")?.querySelector(".emu-idle")?.remove();
   activate("emulator");
 
   try {

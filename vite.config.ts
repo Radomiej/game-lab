@@ -12,11 +12,11 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5191,
     strictPort: true,
-    // Odkomentuj, gdy runtime potrzebuje blokującego stdin
-    // (SharedArrayBuffer/Atomics -> cross-origin isolation):
-    // headers: {
-    //   "Cross-Origin-Opener-Policy": "same-origin",
-    //   "Cross-Origin-Embedder-Policy": "require-corp",
-    // },
+    // SharedArrayBuffer dla synchronicznego interopu Java (TeaVM worker):
+    // Atomics.wait w workerze + natychmiastowa obsługa na main thread.
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    },
   },
 });

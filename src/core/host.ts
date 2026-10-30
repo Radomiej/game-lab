@@ -38,7 +38,7 @@ export class DomLabHost implements LabHost {
   private loopAbort: (() => void) | null = null;
 
   /** Callback ~1×/s z realnym FPS pętli gry (podgląd w IDE). */
-  onFps: ((fps: number) => void) | null = null;
+  onFps: ((fps: number) => void) | undefined;
 
   /** Canvas podglądu — silnik GameLab montuje na nim swój run(). */
   get canvasEl(): HTMLCanvasElement {

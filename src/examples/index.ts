@@ -109,11 +109,25 @@ export const examples: LabExample[] = [
     files: { "main.cpp": content("cpp-console.cpp") },
   },
   {
-    id: "java-slot",
-    label: "Slot: TeaVM",
+    id: "java-game",
+    label: "Gra: monety (TeaVM)",
+    runtime: "java",
+    entry: "GameMain.java",
+    files: { "GameMain.java": content("java-game.java") },
+  },
+  {
+    id: "java-interop",
+    label: "Interop: wspólna scena (Lab.*)",
+    runtime: "java",
+    entry: "GameMain.java",
+    files: { "GameMain.java": content("java-interop.java") },
+  },
+  {
+    id: "java-console",
+    label: "Konsola",
     runtime: "java",
     entry: "Main.java",
-    files: { "Main.java": 'public class Main {\n  public static void main(String[] a) {\n    System.out.println("slot");\n  }\n}\n' },
+    files: { "Main.java": 'public class Main {\n  public static void main(String[] a) {\n    System.out.println("Witaj z Javy!");\n    int suma = 0;\n    for (int i = 1; i <= 10; i++) suma += i;\n    System.out.println("Suma 1..10 = " + suma);\n  }\n}\n' },
   },
   {
     id: "cs-console",
