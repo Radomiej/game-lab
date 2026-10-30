@@ -28,11 +28,51 @@ type LabFacade = ReturnType<typeof createLabFacade>;
 
 let modulePromise: Promise<WasmSharpModuleT> | null = null;
 
-const LAB_CS = `public static class Lab {
+// Escape do literału C# "..."
+const csLit = (s: string): string =>
+  `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "")}"`;
+
+// Snapshot świata z chwili RUN — wstrzykiwany jako literał słownika
+// do Lab.cs. FindComponent/GetNum/GetStr czytają z t=0 (deterministycznie:
+// ops i tak aplikują się po skrypcie, więc "teraz" = start biegu).
+function snapshotLiteral(lab: LabFacade): string {
+  const entries: string[] = [];
+  for (const c of lab.worldInfo()) {
+    const props: Record<string, string> = { __kind__: c.kind };
+    for (const m of c.bridge.listMembers?.() ?? []) {
+      if (m.kind === "prop") {
+        try {
+          props[m.name] = String(c.bridge.get(m.name) ?? "");
+        } catch {
+          /* pomijamy nieczytelne pola */
+        }
+      }
+    }
+    const inner = Object.entries(props)
+      .map(([k, v]) => `{${csLit(k)}, ${csLit(v)}}`)
+      .join(", ");
+    entries.push(
+      `{ ${c.id}, new System.Collections.Generic.Dictionary<string,string> { ${inner} } }`,
+    );
+  }
+  return entries.join(",\n        ");
+}
+
+const labCs = (snapshot: string) => `public static class Lab {
     private static int nextToken = -1;
+    private static readonly System.Collections.Generic.Dictionary<int, System.Collections.Generic.Dictionary<string,string>> __snap =
+        new System.Collections.Generic.Dictionary<int, System.Collections.Generic.Dictionary<string,string>> {
+        ${snapshot}
+        };
     private static void Emit(string op, params object[] args) {
         var sb = new System.Text.StringBuilder("__LAB__|" + op);
-        foreach (var a in args) sb.Append('|').Append(a?.ToString() ?? "");
+        foreach (var a in args) {
+            sb.Append('|');
+            if (a is double || a is float || a is decimal)
+                sb.Append(System.Convert.ToString(a, System.Globalization.CultureInfo.InvariantCulture));
+            else
+                sb.Append(a?.ToString() ?? "");
+        }
         System.Console.WriteLine(sb.ToString());
     }
     // Token klienta (ujemny) — host mapuje na prawdziwe id obiektu.
@@ -45,8 +85,21 @@ const LAB_CS = `public static class Lab {
     public static void SetNumByKind(string kind, string prop, double v) => Emit("setNumByKind", kind, prop, v);
     public static void Call(int comp, string method, string argsJson = "[]") => Emit("call", comp, method, argsJson);
     public static void CallByKind(string kind, string method, string argsJson = "[]") => Emit("callByKind", kind, method, argsJson);
-    public static double GetNum(int comp, string prop) { Emit("noop", "getNum-niewspierane-w-csharp"); return 0; }
-    public static int FindComponent(string kind) { Emit("noop", "findComponent-niewspierane-w-csharp"); return 0; }
+    // Odczyty — snapshot z chwili RUN (kod nie może wołać hosta w trakcie).
+    public static int FindComponent(string kind) {
+        foreach (var kv in __snap)
+            if (kv.Value.TryGetValue("__kind__", out var k) && k == kind) return kv.Key;
+        return 0;
+    }
+    public static double GetNum(int comp, string prop) {
+        if (__snap.TryGetValue(comp, out var d) && d.TryGetValue(prop, out var s)
+            && double.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, out var v)) return v;
+        return 0;
+    }
+    public static string GetStr(int comp, string prop) {
+        if (__snap.TryGetValue(comp, out var d) && d.TryGetValue(prop, out var s)) return s;
+        return "";
+    }
     public static void Print(string msg) => Emit("print", msg);
 }
 `;
@@ -153,7 +206,7 @@ export const csharpRuntime: LabRuntime = {
 
     const lab = createLabFacade(host, "cs", { files: req.files });
     try {
-      const compilation = await mod.createCompilationAsync(source + "\n" + LAB_CS);
+      const compilation = await mod.createCompilationAsync(source + "\n" + labCs(snapshotLiteral(lab)));
       const result = await compilation.run();
       if (result.success) {
         if (result.stdOut) host.stdout(applyLabOps(result.stdOut, lab));
