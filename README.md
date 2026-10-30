@@ -94,7 +94,7 @@ Promise w `invoke`.
 | JavaScript | natywny (`new Function`) | 0 | działa: konsola + gra + interop |
 | TypeScript | sucrase (strip types) | ~1 MB | działa: gra |
 | Lua | **wasmoon** (Lua 5.4→WASM) | ~0.5 MB | działa: konsola + gra + interop |
-| Luau (Roblox) | **slot** — patrz niżej | ~1–2 MB | opis niżej |
+| Luau (Roblox) | **@luau-rs/luau** (Luau 0.739→WASM) | ~2 MB | działa: konsola + interop (sync) |
 | Python | Pyodide (CPython→WASM, lazy CDN) | ~10–30 MB | działa: konsola + gra + interop |
 | C++ | JSCPP (interpreter podzbioru) | ~0.5 MB | konsola; gra wymaga clang→WASM |
 | C# | **@wasmsharp/core** (.NET WASM + Roslyn) | ~41 MB lazy | działa: konsola (prawdziwa kompilacja) |
@@ -104,16 +104,16 @@ Promise w `invoke`.
 
 ### Luau (Roblox)
 
-Realna opcja, bo Luau jest projektowany do osadzania i ma **oficjalny
-target `Luau.Web`** w `luau-lang/luau` (budowa przez Emscripten; napędza
-demo na luau-lang.org). Ścieżka: skompilować raz → `vendor/luau/` +
-nakładka jak `lua.ts`. Bonus: `Luau.Analyze` w WASM daje w przeglądarce
-typowy typecheck (wartość pedagogiczna: uczniowie Robloxa znają składnię).
-Alternatywa: transpiler podzbioru Luau→Lua 5.4 (strip typów, `+=`→`=`,
-`continue`→`goto`, interpolacja→`string.format`, iteracja uogólniona→
-`pairs`) — pokrywa większość kodu szkolnego, ale bez pełnej zgodności.
-Roblox-specific API (`game`, `Instance`, `Vector3`) — mapowalne na
-`lab.*`/`WorldRegistry`, analogicznie do fasady silnika.
+Zintegrowany przez **@luau-rs/luau** — prawdziwy Luau 0.739 w WASM
+(ten sam VM co Roblox). Pełne cechy języka: adnotacje typów, `+=`/`-=`,
+`continue`, string interpolation (`` `x = {v}` ``), uogólniona iteracja.
+Interop synchroniczny jak Lua: `lab.*` wstrzyknięte jako tabela z
+`createFunction`, komponenty Luau tickowane przez host/silnik
+(`attachComponent` z metodą `update(self, dt)`).
+Bonus dostępny w pakiecie (jeszcze nie wpięty): `Luau.Analyze` —
+oficjalny typecheck w przeglądarce (wartość pedagogiczna dla uczniów
+Robloxa). Roblox-specific API (`game`, `Instance`, `Vector3`) można
+mapować na `lab.*`/`WorldRegistry`.
 
 ### Java (TeaVM) — do podpięcia
 

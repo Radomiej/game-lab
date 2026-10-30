@@ -57,6 +57,7 @@ export const NEW_FILE_LANGS: Array<{ ext: string; label: string }> = [
   { ext: "js", label: "JavaScript" },
   { ext: "ts", label: "TypeScript" },
   { ext: "lua", label: "Lua" },
+  { ext: "luau", label: "Luau (Roblox)" },
   { ext: "py", label: "Python" },
   { ext: "cpp", label: "C++" },
   { ext: "cs", label: "C#" },

@@ -6,7 +6,7 @@ import { cppRuntime } from "./cpp";
 import { csharpRuntime } from "./csharp";
 import { javaRuntime } from "./java";
 import { phpRuntime } from "./php";
-import { luauRuntime } from "./stubbed";
+import { luauRuntime } from "./luau";
 
 export const runtimes: LabRuntime[] = [
   javascriptRuntime,

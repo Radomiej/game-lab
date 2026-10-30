@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@luau-rs/luau": "^0.739.0",
     "@php-wasm/universal": "^3.1.52",
     "@php-wasm/web": "^3.1.52",
     "@php-wasm/web-8-4": "^3.1.52",

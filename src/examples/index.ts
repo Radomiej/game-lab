@@ -81,6 +81,20 @@ export const examples: LabExample[] = [
     stdin: "Uczeń",
   },
   {
+    id: "luau-console",
+    label: "Konsola (typy, +=, continue)",
+    runtime: "luau",
+    entry: "main.luau",
+    files: { "main.luau": content("luau-console.luau") },
+  },
+  {
+    id: "luau-interop",
+    label: "Interop: wspólna scena (lab.*)",
+    runtime: "luau",
+    entry: "main.luau",
+    files: { "main.luau": content("luau-interop.luau") },
+  },
+  {
     id: "py-game",
     label: "Gra: kwadrat",
     runtime: "python",
