@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:csharp-bridge": "node scripts/build-lab-bridge.mjs"
   },
   "dependencies": {
     "@luau-rs/luau": "^0.739.0",

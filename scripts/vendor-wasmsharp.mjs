@@ -58,6 +58,36 @@ for (const file of walk(dst)) {
   if (code !== orig) writeFileSync(file, code);
 }
 
+// Keep the browser-side [JSImport] bridge supported after re-vendoring.
+const initializer = join(dst, "initializeWasmSharpModule.js");
+let initCode = readFileSync(initializer, "utf8");
+initCode = initCode.replace(
+  "const { getAssemblyExports, getConfig } = await hostBuilder",
+  "const runtime = await hostBuilder",
+);
+initCode = initCode.replace(
+  "        .create();\n    const config = getConfig();",
+  `        .create();
+    const { getAssemblyExports, getConfig } = runtime;
+    if (options?.moduleImports) runtime.setModuleImports("LabBridge", options.moduleImports);
+    const config = getConfig();`,
+);
+initCode = initCode.replace(
+  "const assembliesAssets = resources.coreAssembly.concat(resources.assembly);",
+  `const lazyAssemblies = resources.lazyAssembly ?? [];
+    if (lazyAssemblies.some((asset) => asset.virtualPath === "System.Runtime.dll")) {
+        await runtime.INTERNAL.loadLazyAssembly("System.Runtime.dll");
+    }
+    if (lazyAssemblies.some((asset) => asset.virtualPath === "LabBridge.dll")) {
+        await runtime.INTERNAL.loadLazyAssembly("LabBridge.dll");
+    }
+    const assembliesAssets = resources.coreAssembly.concat(resources.assembly, lazyAssemblies);`,
+);
+if (!initCode.includes('runtime.setModuleImports("LabBridge", options.moduleImports)') || !initCode.includes('runtime.INTERNAL.loadLazyAssembly("LabBridge.dll")')) {
+  throw new Error("Could not apply the LabBridge initialization patch to WasmSharp");
+}
+writeFileSync(initializer, initCode);
+
 const size = (d) => readdirSync(d, { withFileTypes: true })
   .reduce((a, e) => a + (e.isDirectory() ? size(join(d, e.name)) : require("node:fs").statSync(join(d, e.name)).size), 0);
 console.log("vendored ->", dst, "| latki:", patched);

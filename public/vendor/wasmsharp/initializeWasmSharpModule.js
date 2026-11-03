@@ -12,7 +12,7 @@ export async function initializeWasmSharpModule(options, callbacks) {
     const hostBuilder = dotnetHostBuilder;
     const time = performance.now();
     let resourcesToLoad = 0;
-    const { getAssemblyExports, getConfig } = await hostBuilder
+    const runtime = await hostBuilder
         .withModuleConfig({
         onConfigLoaded(config) {
             resourcesToLoad = Object.keys(config.resources?.assembly ?? {}).length;
@@ -37,6 +37,10 @@ export async function initializeWasmSharpModule(options, callbacks) {
         disableIntegrityCheck: true,
     })
         .create();
+    const { getAssemblyExports, getConfig } = runtime;
+    if (options?.moduleImports) {
+        runtime.setModuleImports("LabBridge", options.moduleImports);
+    }
     const config = getConfig();
     console.log("WasmSharp: Config loaded", config);
     const assemblyExports = await getAssemblyExports(config.mainAssemblyName);
@@ -53,7 +57,14 @@ export async function initializeWasmSharpModule(options, callbacks) {
     if (!resources.assembly || !resources.coreAssembly || !resources.satelliteResources) {
         throw new Error("WasmSharp: config is malformed, no assemblies found");
     }
-    const assembliesAssets = resources.coreAssembly.concat(resources.assembly);
+    const lazyAssemblies = resources.lazyAssembly ?? [];
+    if (lazyAssemblies.some((asset) => asset.virtualPath === "System.Runtime.dll")) {
+        await runtime.INTERNAL.loadLazyAssembly("System.Runtime.dll");
+    }
+    if (lazyAssemblies.some((asset) => asset.virtualPath === "LabBridge.dll")) {
+        await runtime.INTERNAL.loadLazyAssembly("LabBridge.dll");
+    }
+    const assembliesAssets = resources.coreAssembly.concat(resources.assembly, lazyAssemblies);
     const satelliteAssemblies = Object.values(resources.satelliteResources).flatMap((assets) => assets);
     const assemblies = assembliesAssets
         .map((x) => x)
