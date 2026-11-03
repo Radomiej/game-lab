@@ -10,9 +10,13 @@ import {
   getActiveGame,
   labEngineDisposed,
   registerAssetLive,
+  setProjectFileSource,
   unregisterTexture,
 } from "./engine/index";
-import { addUserFile, userAssets, type UserAsset } from "./core/userAssets";
+import { addUserFile, userAssets, isImageAsset, type UserAsset } from "./core/userAssets";
+import { CodeEditor } from "./ui/codeEditor";
+import { SoundEditor } from "./ui/soundEditor";
+import { ImageEditor, transparentPng } from "./ui/imageEditor";
 import type { AssetEntry } from "./engine/assets/Assets.js";
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -36,8 +40,7 @@ const copyBtn = $<HTMLButtonElement>("#cc-copy");
 const wsBtn = $<HTMLButtonElement>("#cc-ws");
 const ccClearBtn = $<HTMLButtonElement>("#cc-clear");
 const copyStatus = $("#copy-status");
-const editor = $<HTMLTextAreaElement>("#editor");
-const gutterEl = $("#gutter");
+const editorHostEl = $<HTMLElement>("#editor");
 const viewTabsEl = $("#view-tabs");
 const viewRoot = $<HTMLElement>("#view-root");
 const sceneCanvas = $<HTMLCanvasElement>("#scene-view");
@@ -56,7 +59,36 @@ const zoomLabel = $("#zoom-label");
 
 const term = new RuntimeConsole(consoleEl, pillEl);
 const host = new DomLabHost(term, canvas);
+const editor = new CodeEditor(editorHostEl);
+if (import.meta.env.DEV) (window as unknown as { __editor: CodeEditor }).__editor = editor;
 let currentFiles: Record<string, string> = {};
+const currentFolders = new Set<string>();
+
+/** Zapis treści pliku z edytorów specjalistycznych (sound/image). */
+function saveFileText(name: string, text: string): void {
+  currentFiles[name] = text;
+}
+
+const soundEd = new SoundEditor($("#sound-editor"), saveFileText);
+const imageEd = new ImageEditor($("#image-editor"), saveFileText, (name, dataUrl) => {
+  void registerProjectImage(name, dataUrl);
+});
+
+setProjectFileSource((name) => currentFiles[name]);
+
+/** Plik .png w projekcie → tekstura GameLab (Sprite("nazwa.png")). */
+async function registerProjectImage(name: string, dataUrl: string): Promise<void> {
+  const img = new Image();
+  await new Promise<void>((res, rej) => {
+    img.onload = () => res();
+    img.onerror = () => rej(new Error("nie można zdekodować PNG"));
+    img.src = dataUrl;
+  });
+  const asset: UserAsset = { key: name, name, kind: "image", dataUrl, image: img, w: img.naturalWidth, h: img.naturalHeight };
+  userAssets.put(asset);
+  registerAssetLive(asset);
+  renderProject();
+}
 let openFile = "main.js";
 let running = false;
 let wantRestart = false;
@@ -92,8 +124,7 @@ let openAssets: string[] = [];
 let activeView: ViewId = `file:${openFile}`;
 
 function syncEditorToFile(name: string): void {
-  editor.value = currentFiles[name] ?? "";
-  syncGutter();
+  editor.open(name, currentFiles[name] ?? "");
 }
 
 function renderViewTabs(): void {
@@ -135,11 +166,17 @@ function renderViewTabs(): void {
   for (const v of PINNED_VIEWS) mk(v.id, v.label, v.label);
 }
 
+function viewKindForFile(name: string): string {
+  if (/\.(sfx|song)$/i.test(name)) return "soundedit";
+  if (isImageAsset(name)) return "imageedit";
+  return "files";
+}
+
 function activate(id: ViewId): void {
-  if (activeView.startsWith("file:")) currentFiles[openFile] = editor.value;
+  if (activeView.startsWith("file:") && viewKindForFile(openFile) === "files") currentFiles[openFile] = editor.value;
   activeView = id;
   renderViewTabs();
-  const kind = id.startsWith("file:") ? "files" : id.startsWith("asset:") ? "asset" : id;
+  const kind = id.startsWith("file:") ? viewKindForFile(id.slice(5)) : id.startsWith("asset:") ? "asset" : id;
   for (const v of viewRoot.querySelectorAll<HTMLElement>(".view")) v.hidden = v.dataset.view !== kind;
   if (kind === "files") {
     const name = id.slice(5);
@@ -149,6 +186,12 @@ function activate(id: ViewId): void {
     }
     renderProject();
     editor.focus();
+  } else if (kind === "soundedit") {
+    soundEd.open(id.slice(5), currentFiles[id.slice(5)] ?? "");
+    renderProject();
+  } else if (kind === "imageedit") {
+    imageEd.open(id.slice(5), currentFiles[id.slice(5)] ?? "");
+    renderProject();
   } else if (kind === "asset") {
     renderAssetView(id.slice(6));
   } else if (kind === "scene") {
@@ -350,6 +393,7 @@ function previewNote(note: string): void {
 function renderProject(): void {
   project.setState({
     files: Object.keys(currentFiles),
+    folders: [...currentFolders],
     entry: settings.entry,
     open: openFile,
     engineAssets: assetManifest.assets,
@@ -359,11 +403,8 @@ function renderProject(): void {
 
 function insertAtCursor(snippet: string): void {
   if (!activeView.startsWith("file:")) activate(`file:${openFile}`);
-  const s = editor.selectionStart;
-  editor.value = editor.value.slice(0, s) + snippet + editor.value.slice(editor.selectionEnd);
-  editor.selectionStart = editor.selectionEnd = s + snippet.length;
+  editor.insert(snippet);
   currentFiles[openFile] = editor.value;
-  syncGutter();
   editor.focus();
 }
 
@@ -381,11 +422,44 @@ const project = new ProjectPanel(projectEl, {
     renderProject();
     activate(`file:${full}`);
   },
+  onAddKind(kind) {
+    if (kind === "folder") {
+      const name = prompt("Nazwa folderu (np. gfx lub sfx/menu):", "gfx")?.trim().replace(/[/\\]+$/g, "").replace(/^[/\\]+/g, "");
+      if (!name) return;
+      currentFolders.add(name);
+      renderProject();
+      return;
+    }
+    if (kind === "png") {
+      const name = prompt("Nazwa obrazu (.png):", "sprite.png")?.trim();
+      if (!name) return;
+      const full = name.toLowerCase().endsWith(".png") ? name : `${name}.png`;
+      if (currentFiles[full] !== undefined) return;
+      currentFiles[full] = transparentPng(16);
+      void registerProjectImage(full, currentFiles[full]);
+      renderViewTabs();
+      renderProject();
+      activate(`file:${full}`);
+      return;
+    }
+    const ext = kind === "sfx" ? "sfx" : "song";
+    const name = prompt(`Nazwa dźwięku (.${ext}):`, `dziwek.${ext}`)?.trim();
+    if (!name) return;
+    const full = name.toLowerCase().endsWith(`.${ext}`) ? name : `${name}.${ext}`;
+    if (currentFiles[full] !== undefined) return;
+    currentFiles[full] = kind === "sfx"
+      ? JSON.stringify({ kind: "sfx", wave: "square", freq: 300, slide: -150, dur: 0.3, attack: 0.005, noise: 0.3, volume: 0.7 }, null, 1)
+      : JSON.stringify({ kind: "song", bpm: 120, steps: 16, wave: "square", notes: [] }, null, 1);
+    renderViewTabs();
+    renderProject();
+    activate(`file:${full}`);
+  },
   onRename(name) {
     const next = prompt("Nowa nazwa pliku:", name)?.trim();
     if (!next || next === name || currentFiles[next] !== undefined) return;
     currentFiles[next] = currentFiles[name];
     delete currentFiles[name];
+    editor.rename(name, next);
     if (settings.entry === name) settings.entry = next;
     if (openFile === name) openFile = next;
     renderViewTabs();
@@ -394,6 +468,7 @@ const project = new ProjectPanel(projectEl, {
   onDelete(name) {
     if (name === settings.entry) return;
     delete currentFiles[name];
+    editor.drop(name);
     if (openFile === name) activate(`file:${settings.entry}`);
     renderViewTabs();
     renderProject();
@@ -455,15 +530,6 @@ const project = new ProjectPanel(projectEl, {
     else previewAudio(x);
   },
 });
-
-function syncGutter(): void {
-  const lines = editor.value.split("\n").length;
-  const nums = gutterEl.childElementCount;
-  if (nums !== lines) {
-    gutterEl.textContent = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
-  }
-  gutterEl.scrollTop = editor.scrollTop;
-}
 
 // ---- hierarchia sceny jak w Unity ----
 const closedObjects = new Set<number>();
@@ -645,26 +711,10 @@ async function run(): Promise<void> {
   }
 }
 
-editor.oninput = () => {
+editor.onDidChange(() => {
   currentFiles[openFile] = editor.value;
-  syncGutter();
-};
-editor.onscroll = () => {
-  gutterEl.scrollTop = editor.scrollTop;
-};
-editor.onkeydown = (e) => {
-  if (e.key === "Tab") {
-    e.preventDefault();
-    const { selectionStart: s, selectionEnd: e2 } = editor;
-    editor.value = editor.value.slice(0, s) + "  " + editor.value.slice(e2);
-    editor.selectionStart = editor.selectionEnd = s + 2;
-    currentFiles[openFile] = editor.value;
-    syncGutter();
-  } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-    e.preventDefault();
-    void run();
-  }
-};
+});
+editor.addRunCommand(() => void run());
 runBtn.onclick = run;
 stopBtn.onclick = () => {
   const rt = runtimeFor(settings.entry);

@@ -20,6 +20,18 @@ export function createPhysics(game, types, SpatialHash) {
     }
     return Math.abs(dx) <= extent(a, 'x') + extent(b, 'x') + margin && Math.abs(dy) <= extent(a, 'y') + extent(b, 'y') + margin;
   };
+  // Signed surface distance: positive = gap, negative = penetration depth.
+  const separation = (a, b) => {
+    const dx = a.transform.x - b.transform.x, dy = a.transform.y - b.transform.y;
+    if (circle(a) && circle(b)) return Math.hypot(dx, dy) - (extent(a, 'x') + extent(b, 'x'));
+    if (circle(a) || circle(b)) {
+      const c = circle(a) ? a : b, r = circle(a) ? b : a;
+      const x = c.transform.x - clamp(c.transform.x, r.transform.x - extent(r, 'x'), r.transform.x + extent(r, 'x'));
+      const y = c.transform.y - clamp(c.transform.y, r.transform.y - extent(r, 'y'), r.transform.y + extent(r, 'y'));
+      return Math.hypot(x, y) - extent(c, 'x');
+    }
+    return Math.max(Math.abs(dx) - (extent(a, 'x') + extent(b, 'x')), Math.abs(dy) - (extent(a, 'y') + extent(b, 'y')));
+  };
   const masks = (a, b) => (collider(a).mask & collider(b).layer) !== 0 && (collider(b).mask & collider(a).layer) !== 0;
   const sensor = o => collider(o)?.isTrigger;
   const ignored = (a, b) => a.getComponent(Projectile2D)?.owner === b || b.getComponent(Projectile2D)?.owner === a;
@@ -77,6 +89,19 @@ export function createPhysics(game, types, SpatialHash) {
   }
   function step(delta) {
     rebuild(); contacts.clear(); stats.candidates = stats.narrowPhaseTests = 0;
+    // Kontrolery bez Collider2D nie są ciałami fizycznymi — poruszają się
+    // swobodnie (bez kolizji), ale velocity musi trafić na transform.
+    for (const o of game.getObjects()) {
+      if (bodies.has(o.id)) continue;
+      const v = o.getComponent(CharacterController2D);
+      if (!live(o) || !v?.enabled || !v.created) continue;
+      o.transform.x += v.velocity.x * delta; o.transform.y += v.velocity.y * delta;
+      if (v.constrainToBounds && game.worldBounds) {
+        const b = game.worldBounds, w = Math.min(extent(o, 'x'), b.width / 2), h = Math.min(extent(o, 'y'), b.height / 2);
+        o.transform.x = clamp(o.transform.x, b.x + w, b.x + b.width - w); o.transform.y = clamp(o.transform.y, b.y + h, b.y + b.height - h);
+      }
+      v.onAfterMove(delta);
+    }
     for (const o of [...bodies.values()]) {
       const v = o.getComponent(CharacterController2D); if (!ready(o) || !v?.enabled || !v.created) continue;
       const p = o.getComponent(Projectile2D);
@@ -106,8 +131,12 @@ export function createPhysics(game, types, SpatialHash) {
           if (other === o || !masks(o, other) || ignored(o, other) || other.getComponent(Projectile2D)?.enabled) continue;
           stats.narrowPhaseTests++;
           // At a starting tangent, moving away or along it must remain possible.
-          const old = o.transform[axis]; o.transform[axis] += Math.sign(movement) * EPS * 4;
-          const entering = overlaps(o, other, -EPS); o.transform[axis] = old;
+          // At a starting tangent, moving away or along it must remain possible;
+          // an embedded body may always move back out — only deeper penetration blocks.
+          const old = o.transform[axis], before = separation(o, other);
+          o.transform[axis] += Math.sign(movement) * EPS * 4;
+          const entering = overlaps(o, other, -EPS) && separation(o, other) < before - 1e-9;
+          o.transform[axis] = old;
           const t = hit(o, other, dx, dy);
           if (t > 1 || (t === 0 && !entering)) continue;
           const trigger = sensor(o) || sensor(other);

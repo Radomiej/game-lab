@@ -181,6 +181,64 @@ export function createLabAudio() {
       if (loop && totalBeats > 0) loopTimer = setTimer(() => playSong(normalized, { loop: true, volume }), totalBeats * secondsPerBeat * 1000);
     }
 
+    /** Jednostrzałowy synth SFX z pliku .sfx:
+     * {wave, freq, slide, dur, attack, decay, noise, filterFreq, filterSlide, volume} */
+    function playSfx(spec, { volume = 0.7 } = {}) {
+      if (!spec || typeof spec !== 'object') throw new Error('SFX to obiekt specyfikacji.');
+      if (!ensure()) return;
+      context.resume?.();
+      const dur = Math.max(0.03, Number(spec.dur ?? 0.3) || 0.3);
+      const t0 = context.currentTime + 0.02;
+      const mix = Math.min(1, Math.max(0, Number(spec.noise ?? 0) || 0));
+      const env = context.createGain();
+      const peak = Math.max(0.0001, (Number(spec.volume ?? 1) || 1) * volume);
+      env.gain.setValueAtTime(0.0001, t0);
+      env.gain.linearRampToValueAtTime(peak, t0 + Math.max(0.002, Number(spec.attack ?? 0.005) || 0.005));
+      env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      const tail = { node: env };
+      if (spec.filterFreq) {
+        const f = context.createBiquadFilter();
+        f.type = 'lowpass';
+        f.frequency.setValueAtTime(Math.max(40, spec.filterFreq), t0);
+        if (spec.filterSlide) f.frequency.exponentialRampToValueAtTime(Math.max(40, spec.filterFreq + spec.filterSlide), t0 + dur);
+        env.connect(f); f.connect(master); tail.node = f;
+      } else env.connect(master);
+      if (mix > 0) {
+        const n = noiseSource(context); const ng = context.createGain(); ng.gain.value = mix;
+        n.connect(ng); ng.connect(env); n.start(t0); n.stop(t0 + dur + 0.02);
+        sources.add(n); n.onended = () => sources.delete(n);
+      }
+      if (mix < 1 && spec.wave !== 'noise') {
+        const o = context.createOscillator();
+        o.type = WAVES.includes(spec.wave) ? spec.wave : 'square';
+        const f0 = Math.max(20, Number(spec.freq ?? 220) || 220);
+        o.frequency.setValueAtTime(f0, t0);
+        if (spec.slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, f0 + spec.slide), t0 + dur);
+        const og = context.createGain(); og.gain.value = 1 - mix;
+        o.connect(og); og.connect(env); o.start(t0); o.stop(t0 + dur + 0.02);
+        sources.add(o); o.onended = () => sources.delete(o);
+      }
+    }
+
+    /** Sekwencja z pliku .song: {bpm, steps, wave, notes:[{step, note|midi, len, wave?, gain?}]} —
+     * akordy = kilka nut w tym samym kroku (polifonia gratis). */
+    function playSeq(spec, { loop = false, volume = 0.6 } = {}) {
+      if (!spec || typeof spec !== 'object') throw new Error('Melodia to obiekt specyfikacji.');
+      if (!ensure()) return;
+      stop();
+      context.resume?.();
+      const spb = 60 / (Number(spec.bpm ?? 120) || 120);
+      const start = context.currentTime + 0.05;
+      for (const n of spec.notes ?? []) {
+        const midi = n.midi ?? (n.note ? parseNote(n.note) : null);
+        if (midi === null) continue;
+        tone(midi, start + (Number(n.step) || 0) * spb, Math.max(0.1, Number(n.len ?? 1) || 1) * spb,
+          WAVES.includes(n.wave ?? spec.wave) ? (n.wave ?? spec.wave) : 'square', (Number(n.gain ?? 1) || 1) * volume);
+      }
+      const total = Math.max(0, Number(spec.steps ?? 0)) * spb;
+      if (loop && total > 0) loopTimer = setTimer(() => playSeq(spec, { loop: true, volume }), total * 1000);
+    }
+
     function stop() {
       if (loopTimer !== null) { clearTimer(loopTimer); loopTimer = null; }
       for (const source of sources) { try { source.stop(); } catch { /* już zatrzymane */ } }
@@ -201,7 +259,7 @@ export function createLabAudio() {
       target.addEventListener('keydown', resume);
     }
 
-    return { playNote, play: playSong, playSong, stop, dispose, resume, bindGestures };
+    return { playNote, play: playSong, playSong, playSfx, playSeq, stop, dispose, resume, bindGestures };
   }
 
   return { parseNote, midiToHz, normalizeSong, Song, Sequencer, createAudio };

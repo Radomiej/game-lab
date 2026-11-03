@@ -35,8 +35,7 @@
         <section id="view-root">
           <div class="view view-editor" data-view="files">
             <div class="editor-body">
-              <pre id="gutter" class="gutter" aria-hidden="true"></pre>
-              <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Kod źródłowy"></textarea>
+              <div id="editor" aria-label="Kod źródłowy"></div>
             </div>
           </div>
           <div class="view view-emulator" data-view="emulator" hidden>
@@ -100,6 +99,8 @@
             <canvas id="scene-view" aria-label="Podgląd całej sceny"></canvas>
           </div>
           <div class="view view-asset" data-view="asset" hidden></div>
+          <div class="view view-soundedit" data-view="soundedit" hidden><div id="sound-editor" class="se-root"></div></div>
+          <div class="view view-imageedit" data-view="imageedit" hidden><div id="image-editor" class="px-root"></div></div>
           <div class="view view-sounds" data-view="sounds" hidden></div>
         </section>
         <div class="pane-resizer rs-y" id="rs-console" role="separator" aria-orientation="horizontal" aria-label="Zmień wysokość konsoli" title="Przeciągnij, by zmienić wysokość konsoli"></div>

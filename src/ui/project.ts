@@ -8,6 +8,8 @@ import { imageThumb, spriteThumb } from "./assetThumbs";
 
 export interface ProjectState {
   files: string[];
+  /** Deklarowane (także puste) foldery — renderowane jako sekcje. */
+  folders: string[];
   entry: string;
   open: string;
   engineAssets: AssetEntry[];
@@ -19,6 +21,8 @@ export interface ProjectCallbacks {
   onSelect(name: string): void;
   /** Nowy plik w wybranym języku (rozszerzenie z menu). */
   onAdd(ext: string): void;
+  /** Specjalny tworzony zasób: folder | png | sfx | song. */
+  onAddKind(kind: "folder" | "png" | "sfx" | "song"): void;
   onRename(name: string): void;
   onDelete(name: string): void;
   onSetEntry(name: string): void;
@@ -47,6 +51,15 @@ const EXT_BADGE: Record<string, { tag: string; color: string }> = {
   json: { tag: "{}", color: "#8be9fd" },
   txt: { tag: "Tx", color: "#9fb3c4" },
   md: { tag: "Md", color: "#9fb3c4" },
+  png: { tag: "🖼", color: "#29adff" },
+  jpg: { tag: "🖼", color: "#29adff" },
+  jpeg: { tag: "🖼", color: "#29adff" },
+  gif: { tag: "🖼", color: "#29adff" },
+  webp: { tag: "🖼", color: "#29adff" },
+  svg: { tag: "🖼", color: "#29adff" },
+  bmp: { tag: "🖼", color: "#29adff" },
+  sfx: { tag: "♪", color: "#ffd166" },
+  song: { tag: "♫", color: "#ffd166" },
 };
 
 const FILE_BADGE = { tag: "ƒ", color: "#7d93a5" };
@@ -92,7 +105,7 @@ function fileName(path: string): string {
 type TabId = "files" | "assets" | "sounds";
 
 export class ProjectPanel {
-  private state: ProjectState = { files: [], entry: "", open: "", engineAssets: [], userAssets: [] };
+  private state: ProjectState = { files: [], folders: [], entry: "", open: "", engineAssets: [], userAssets: [] };
   private tab: TabId = "files";
   private fileInput: HTMLInputElement | null = null;
   private langMenu: HTMLElement | null = null;
@@ -206,6 +219,30 @@ export class ProjectPanel {
       b.onclick = () => {
         close();
         this.cb.onAdd(l.ext);
+      };
+      menu.appendChild(b);
+    }
+    const sep = document.createElement("div");
+    sep.className = "lang-sep";
+    sep.setAttribute("aria-hidden", "true");
+    menu.appendChild(sep);
+    const SPECIALS: Array<{ kind: "folder" | "png" | "sfx" | "song"; label: string; tag: string; color: string }> = [
+      { kind: "folder", label: "Folder", tag: "▣", color: "#8be9fd" },
+      { kind: "png", label: "Obraz (.png)", tag: "🖼", color: "#29adff" },
+      { kind: "sfx", label: "Dźwięk (.sfx)", tag: "♪", color: "#ffd166" },
+      { kind: "song", label: "Melodia (.song)", tag: "♫", color: "#ffd166" },
+    ];
+    for (const sp of SPECIALS) {
+      const b = document.createElement("button");
+      b.className = "lang-option";
+      b.setAttribute("role", "menuitem");
+      b.append(this.badge({ tag: sp.tag, color: sp.color }));
+      const s = document.createElement("span");
+      s.textContent = sp.label;
+      b.appendChild(s);
+      b.onclick = () => {
+        close();
+        this.cb.onAddKind(sp.kind);
       };
       menu.appendChild(b);
     }
@@ -420,6 +457,7 @@ export class ProjectPanel {
 
   private renderFiles(): void {
     const groups = new Map<string, string[]>();
+    for (const d of this.state.folders) if (!groups.has(d)) groups.set(d, []);
     for (const f of this.state.files) {
       const i = f.indexOf("/");
       const dir = i < 0 ? "" : f.slice(0, i);

@@ -56,9 +56,20 @@ wywołania (`print`, `lab.drawRect`, `cin >>`…) na LRP i zwraca
   GameObject → komponenty → publiczne pola z wartościami na żywo
   i metody; węzły zwijane, badge pokazuje język komponentu.
 - **Project** (lewy panel, jak Unity Project): pliki projektu
-  pogrupowane w foldery (`assets/…` → sekcja Assets), nowy/usuń/
-  zmień nazwę/★ plik startowy; sekcja "Assets silnika" z wbudowanymi
-  assetami — klik wstawia `lab.asset("klucz")` do edytora.
+  pogrupowane w foldery (`assets/…` → sekcja Assets), foldery puste,
+  nowy/usuń/zmień nazwę/★ plik startowy; sekcja "Assets silnika"
+  z wbudowanymi assetami — klik wstawia `lab.asset("klucz")` do edytora.
+- **Edytor**: Monaco (syntax highlight per-rozszerzenie, Ctrl+Enter=RUN,
+  model per-plik z undo). Pliki specjalne mają własne edytory w centrum:
+  `.png` → edytor pikseli (paleta, gumka, zapis = dataURL PNG + tekstura
+  `Sprite("nazwa.png")` od razu w silniku), `.sfx` → synth SFX z suwakami
+  (presety: Wybuch/Deszcz/Laser/Skok/Moneta/Uderzenie/Powerup/Alarm/
+  Wiatr/Splash), `.song` → sekwencer krokowy (siatka nut × kroki, BPM,
+  akordy = kilka nut w kroku, loop).
+- **Dźwięk** (`this.sound.*` w grze): `playNote("C5")`, `playSong`,
+  `playSfx(spec)`, `playSeq(seq)`, `playSound(nazwa)` — nazwa rozwiązuje
+  kolejno: plik projektu `.sfx`/`.song` (spec JSON) → uploadowany audio
+  → fallback nuta.
 - **Playground**: projekt = wiele plików. W JS/TS pliki nie-startowe
   doklejane są przed startowy (helpers → main), więc funkcje/klasy
   pomocnicze są widoczne w entry. `lab.readFile(name)` czyta pliki
@@ -160,9 +171,11 @@ Limity POC: pierwszy load ~41 MB (lazy, potem cache przeglądarki);
 `disableWebWorker: true` (worker wymaga HTTPS i `new URL(worker)` w
 bundlerze); entry point = **top-level statements** (klasyczne
 `static void Main()` rzuca `TargetParameterCountException` —
-`CodeSession.RunAsync` woła bezargumentowe entry); kod ucznia bez mostu
-do `lab.*` — gamedev/interop C# wymaga własnego host-assembly z
-`[JSExport]` (roadmapa v2); `Console.ReadLine` bez stdin.
+`CodeSession.RunAsync` woła bezargumentowe entry); `Console.ReadLine`
+bez stdin. Interop `lab.*` działa synchronicznie przez prekompilowany
+`LabBridge.dll` (`[JSImport]` stubs z offline builda .NET SDK →
+`setModuleImports("LabBridge")` + lazy-assembly ładowane do kompilacji
+Roslyn; `using LabBridge;` dopisywane automatycznie do kodu ucznia).
 
 ## Ograniczenia POC (świadome)
 
@@ -175,7 +188,6 @@ do `lab.*` — gamedev/interop C# wymaga własnego host-assembly z
   = Atomics.wait + izolacja cross-origin.
 - Marshal interopu = prymitywy (number/string/bool/handle-id). Obiekty
   zagnieżdżone i klasy — warstwa v2 (CBOR/pointer handles).
-- Brak Monaco, przykłady jednoplikowe; brak sprite'ów/atlasu.
 - Testy zadań (porównanie stdout) nie zaimplementowane — wzorzec
   `java-lab/src/services/lessonChecker.js`.
 

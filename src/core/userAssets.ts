@@ -41,6 +41,9 @@ export const userAssets = {
   get(key: string): UserAsset | undefined {
     return registry.get(key);
   },
+  put(asset: UserAsset): void {
+    registry.set(asset.key, asset);
+  },
   remove(key: string): void {
     registry.delete(key);
   },

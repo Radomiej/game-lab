@@ -33,6 +33,13 @@ export function getActiveEngine(): GameLabApi | null {
   return active;
 }
 
+/** Źródło plików projektu — main.ts podpina currentFiles, żeby
+ *  playSound("boom.sfx"/"intro.song") rozwiązywał spec JSON z projektu. */
+let projectFileSource: ((name: string) => string | undefined) | null = null;
+export function setProjectFileSource(fn: ((name: string) => string | undefined) | null): void {
+  projectFileSource = fn;
+}
+
 export function createLabEngine(canvas: HTMLCanvasElement): GameLabApi {
   const docShim = {
     querySelector: (sel: string) => (sel === "#game" ? canvas : document.querySelector(sel)),
@@ -52,8 +59,19 @@ export function createLabEngine(canvas: HTMLCanvasElement): GameLabApi {
   const lab = createGameLab({
     window,
     document: docShim,
-    // game.sound.playSound("plik.wav") — user audio z dropzone
+    // game.sound.playSound("plik.wav" | "boom.sfx" | "intro.song" | "C5")
     resolveSound: (name: string) => {
+      const fileText = projectFileSource?.(name);
+      if (fileText !== undefined) {
+        const kind = /\.sfx$/i.test(name) ? "sfx" : /\.song$/i.test(name) ? "song" : null;
+        if (kind) {
+          try {
+            return { kind, spec: JSON.parse(fileText) };
+          } catch {
+            return undefined;
+          }
+        }
+      }
       const a = userAssets.get(name);
       return a?.kind === "audio" ? a.dataUrl : undefined;
     },

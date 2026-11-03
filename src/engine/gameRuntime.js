@@ -467,9 +467,15 @@ export function createGameLab(environment = {}, shared = { Assets, assetManifest
       this.sound = {
         playNote: (note, o) => this.audio.playNote(note, o),
         playSong: (song, o) => this.audio.playSong(song, o),
+        playSfx: (spec, o) => this.audio.playSfx(spec, o),
+        playSeq: (seq, o) => this.audio.playSeq(seq, o),
         stop: () => this.audio.stop(),
         playSound: (name, o = {}) => {
           const src = environment.resolveSound && environment.resolveSound(name);
+          if (src && typeof src === 'object') {
+            if (src.kind === 'sfx') return this.audio.playSfx(src.spec, o);
+            if (src.kind === 'song') return this.audio.playSeq(src.spec, { loop: Boolean(o.loop), volume: o.volume });
+          }
           if (src) { const a = new win.Audio(src); a.volume = o.volume ?? 0.8; a.loop = Boolean(o.loop); a.play().catch(() => {}); return a; }
           return this.audio.playNote(name, o);
         },

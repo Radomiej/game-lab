@@ -4,6 +4,10 @@ export interface LabAudioOut {
   playNote(note: string, opts?: { wave?: string; beats?: number; tempo?: number; volume?: number }): void;
   play(song: unknown, opts?: { loop?: boolean; volume?: number }): void;
   playSong(song: unknown, opts?: { loop?: boolean; volume?: number }): void;
+  /** Synth SFX z suwaków (.sfx): freq+slide+dur+noise+filtr LP. */
+  playSfx(spec: unknown, opts?: { volume?: number; at?: number; tempo?: number }): void;
+  /** Sekwencer (.song): siatka nut {step,note,len} z BPM. */
+  playSeq(seq: unknown, opts?: { loop?: boolean; volume?: number }): void;
   stop(): void;
   dispose(): void;
   resume(): void;
