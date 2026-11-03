@@ -14,6 +14,10 @@ export interface ComponentBridge {
   get(name: string): unknown;
   set(name: string, value: unknown): void;
   invoke(method: string, args: unknown[]): unknown;
+  /** Optional asynchronous dispatch for runtimes that resume from a snapshot. */
+  invokeAsync?(method: string, args: unknown[]): Promise<unknown>;
+  /** Optional cleanup for foreign-runtime handles owned by this bridge. */
+  dispose?(): void;
   /** Opcjonalnie: publiczne składowe komponentu (do inspektora hierarchii). */
   listMembers?(): MemberInfo[];
 }
@@ -97,6 +101,12 @@ export class WorldRegistry {
     return this.components.get(compId)?.bridge.invoke(method, args);
   }
 
+  async callAsync(compId: number, method: string, args: unknown[] = []): Promise<unknown> {
+    const bridge = this.components.get(compId)?.bridge;
+    if (!bridge) return undefined;
+    return bridge.invokeAsync ? bridge.invokeAsync(method, args) : bridge.invoke(method, args);
+  }
+
   /** Tickuje update(dt) na wszystkich komponentach — woła host raz na klatkę.
    *  engineLive=true: komponenty zmostkowane do GameLab pomijamy (silnik je
    *  tickuje sam). invoke może zwracać Promise (async FFI, np. WASM). */
@@ -112,12 +122,19 @@ export class WorldRegistry {
   }
 
   destroyObject(objectId: number): void {
-    for (const cid of this.objectComps.get(objectId) ?? []) this.components.delete(cid);
+    for (const cid of this.objectComps.get(objectId) ?? []) {
+      const component = this.components.get(cid);
+      try { component?.bridge.dispose?.(); } catch { /* cleanup must continue */ }
+      this.components.delete(cid);
+    }
     this.objectComps.delete(objectId);
     this.objectNames.delete(objectId);
   }
 
   clear(): void {
+    for (const component of this.components.values()) {
+      try { component.bridge.dispose?.(); } catch { /* cleanup must continue */ }
+    }
     this.components.clear();
     this.objectComps.clear();
     this.objectNames.clear();

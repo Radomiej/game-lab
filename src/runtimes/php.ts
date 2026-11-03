@@ -16,8 +16,15 @@ const RUN_TIMEOUT = 15000;
 let phpInstance: PHP | null = null;
 let runtimePromise: Promise<PHP> | null = null;
 let runSequence = 0;
+let stepSequence = 0;
 let executionQueue: Promise<unknown> = Promise.resolve();
 let detachMessage: (() => Promise<void>) | null = null;
+
+function enqueuePhp<T>(job: () => Promise<T>): Promise<T> {
+  const result = executionQueue.then(job);
+  executionQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
 
 function safeProjectPath(path: string): string {
   const value = String(path || "").replaceAll("\\", "/");
@@ -72,6 +79,9 @@ class Lab {
     public static function callMethod(int $comp, string $method, array $args = []) {
         return self::call('call', ['comp' => $comp, 'method' => $method, 'args' => $args]);
     }
+    public static function attachStateComponent(int $object, string $kind, string $handlerFile, array $state = []) {
+        return self::call('attachStateComponent', ['object' => $object, 'kind' => $kind, 'handlerFile' => $handlerFile, 'state' => $state]);
+    }
     public static function worldInfo() {
         return self::call('info', []);
     }
@@ -80,7 +90,115 @@ class Lab {
 
 type LabOp = { op?: string; args?: Record<string, unknown> };
 
-function applyLabMessage(raw: string, lab: ReturnType<typeof createLabFacade>, php: PHP): void {
+type PhpStepContext = {
+  php: PHP;
+  host: LabHost;
+  lab: ReturnType<typeof createLabFacade>;
+  runRoot: string;
+  files: Record<string, string>;
+};
+
+function toBase64Utf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function withPhpLabListener<T>(php: PHP, lab: PhpStepContext["lab"], context: PhpStepContext, job: () => Promise<T>): Promise<T> {
+  if (detachMessage) {
+    try { await detachMessage(); } catch { /* noop */ }
+    detachMessage = null;
+  }
+  const detach = php.onMessage((data: unknown) => applyLabMessage(String(data), lab, php, context));
+  detachMessage = detach;
+  try {
+    return await job();
+  } finally {
+    try { await detach(); } catch { /* noop */ }
+    if (detachMessage === detach) detachMessage = null;
+  }
+}
+
+async function runPhpComponentStep(
+  context: PhpStepContext,
+  handlerFile: string,
+  method: string,
+  args: unknown[],
+  state: Record<string, unknown>,
+): Promise<{ state: Record<string, unknown>; result: unknown }> {
+  const php = context.php;
+  const requestId = ++stepSequence;
+  const resultMarker = `__LAB_STATE_STEP_${requestId}__`;
+  const handlerPath = `${context.runRoot}/${safeProjectPath(handlerFile)}`;
+  const payload = toBase64Utf8(JSON.stringify({ state, method, args, handlerPath }));
+  const scriptPath = `${context.runRoot}/.lab-step-${requestId}.php`;
+  const phpSource = `<?php
+$input = json_decode(base64_decode('${payload}'), true, 512, JSON_THROW_ON_ERROR);
+require $input['handlerPath'];
+if (!function_exists('lab_component_dispatch')) { throw new RuntimeException('handler must define lab_component_dispatch($state, $method, $args)'); }
+$output = lab_component_dispatch($input['state'], $input['method'], $input['args']);
+if (!is_array($output) || !array_key_exists('state', $output) || !array_key_exists('result', $output)) { throw new RuntimeException('handler must return ["state" => ..., "result" => ...]'); }
+echo "\\n${resultMarker}" . base64_encode(json_encode($output, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)) . "\\n";
+`;
+  php.writeFile(scriptPath, phpSource);
+  const response = await withPhpLabListener(php, context.lab, context, () =>
+    withTimeout(withPHPIniValues(php, { auto_prepend_file: `${context.runRoot}/Lab.php` }, () => php.run({ scriptPath }))),
+  );
+  const stdout = String(response.text ?? "");
+  const errors = String(response.errors ?? "");
+  if (errors) context.host.stderr(errors);
+  if (Number(response.exitCode ?? 0) !== 0) {
+    throw new Error(errors.trim() || `PHP state handler exited with code ${response.exitCode}`);
+  }
+  const markerAt = stdout.lastIndexOf(resultMarker);
+  if (markerAt < 0) throw new Error("PHP state handler did not return its state/result envelope");
+  const encoded = stdout.slice(markerAt + resultMarker.length).trim().split(/\s/, 1)[0];
+  let decoded: unknown;
+  try { decoded = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0)))); }
+  catch (error) { throw new Error(`Invalid PHP state handler response: ${describeError(error)}`); }
+  const envelope = decoded as { state?: unknown; result?: unknown } | null;
+  if (!envelope || typeof envelope.state !== "object" || envelope.state === null || Array.isArray(envelope.state) || !Object.hasOwn(envelope, "result")) {
+    throw new Error("PHP state handler returned an invalid state/result envelope");
+  }
+  return { state: envelope.state as Record<string, unknown>, result: envelope.result };
+}
+
+function attachStateComponent(
+  context: PhpStepContext,
+  objectId: number,
+  kind: string,
+  handlerFile: string,
+  initialState: unknown,
+): number {
+  const path = safeProjectPath(handlerFile);
+  if (!path.endsWith(".php") || typeof context.files[path] !== "string") {
+    throw new Error(`PHP state handler file not found: ${path}`);
+  }
+  if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
+    throw new Error("PHP state component state must be a JSON object");
+  }
+  let state = JSON.parse(JSON.stringify(initialState)) as Record<string, unknown>;
+  let disposed = false;
+  const componentId = context.lab.attachBridge(objectId, kind, {
+    get: (name) => state[name],
+    set: (name, value) => { state[name] = value; },
+    invoke: () => undefined,
+    invokeAsync: async (method, args) => {
+      if (disposed) throw new Error(`PHP state component ${kind} was disposed`);
+      const output = await enqueuePhp(() => runPhpComponentStep(context, path, method, args, state));
+      if (!disposed) state = output.state;
+      return output.result;
+    },
+    dispose: () => { disposed = true; },
+    listMembers: () => Object.keys(state).map((name) => ({ name, kind: "prop" as const })),
+  });
+  return componentId;
+}
+
+function applyLabMessage(raw: string, lab: ReturnType<typeof createLabFacade>, php: PHP, context: PhpStepContext): void {
   let msg: LabOp;
   try {
     msg = JSON.parse(raw) as LabOp;
@@ -116,6 +234,9 @@ function applyLabMessage(raw: string, lab: ReturnType<typeof createLabFacade>, p
         break;
       case "call":
         result = lab.call(num(args.comp), String(args.method ?? ""), ...(Array.isArray(args.args) ? (args.args as unknown[]) : []));
+        break;
+      case "attachStateComponent":
+        result = attachStateComponent(context, num(args.object), String(args.kind ?? ""), String(args.handlerFile ?? ""), args.state);
         break;
       case "info":
         result = lab.worldInfo();
@@ -193,45 +314,26 @@ export const phpRuntime: LabRuntime = {
     if (!req.files[entry]) return { status: "compile-error", message: `brak pliku ${entry}` };
 
     const lab = createLabFacade(host, "php", { files: req.files });
-    const job = executionQueue.then(async (): Promise<RunResult> => {
+    const runResult = await enqueuePhp(async (): Promise<{ result: RunResult; game: ReturnType<typeof getActiveGame> }> => {
       const php = await getPhp();
       const runRoot = `${PROJECT_ROOT}/run-${++runSequence}`;
       writeProjectFiles(php, req.files, runRoot);
-
-      // jedna instancja onMessage — odpinamy poprzednią, by nie dublować
-      if (detachMessage) {
-        try { await detachMessage(); } catch { /* noop */ }
-        detachMessage = null;
-      }
-      detachMessage = php.onMessage((data: unknown) => {
-        applyLabMessage(String(data), lab, php);
-      });
+      const context: PhpStepContext = { php, host, lab, runRoot, files: req.files };
 
       try {
         // Lab.php laduje sie przed kazdym skryptem (auto_prepend_file).
-        const response = await withTimeout(
-          withPHPIniValues(php, { auto_prepend_file: `${runRoot}/Lab.php` }, () =>
-            php.run({ scriptPath: `${runRoot}/${entry}` }),
-          ),
+        const response = await withPhpLabListener(php, lab, context, () =>
+          withTimeout(withPHPIniValues(php, { auto_prepend_file: `${runRoot}/Lab.php` }, () => php.run({ scriptPath: `${runRoot}/${entry}` }))),
         );
         const stdout = String(response.text ?? "");
         const errors = String(response.errors ?? "");
         if (stdout) host.stdout(stdout);
         if (errors) host.stderr(errors);
         const exitCode = Number(response.exitCode ?? 0);
-
-        // Skrypt mógł zmaterializować scenę (attachRenderer/spawn) —
-        // trzymamy run() do Stop, jak Lua/Python.
-        const game = getActiveGame();
-        if (game) {
-          host.onPaused = (p) => (p ? game.pause() : game.resume());
-          try {
-            await host.startGameLoop(() => {});
-          } finally {
-            host.onPaused = undefined;
-          }
-        }
-        return exitCode === 0 ? { status: "ok" } : { status: "runtime-error", message: `exit code ${exitCode}` };
+        return {
+          result: exitCode === 0 ? { status: "ok" } : { status: "runtime-error", message: `exit code ${exitCode}` },
+          game: getActiveGame(),
+        };
       } catch (err) {
         const msg = describeError(err);
         if (/limit czasu|przekroczył|semaphore/i.test(msg)) {
@@ -240,11 +342,21 @@ export const phpRuntime: LabRuntime = {
           runtimePromise = null;
         }
         host.stderr(msg + "\n");
-        return { status: "runtime-error", message: msg };
+        return { result: { status: "runtime-error", message: msg }, game: null };
       }
     });
-    executionQueue = job.then(() => undefined, () => undefined);
-    const result = await job;
+    let result = runResult.result;
+    if (result.status === "ok" && runResult.game) {
+      const game = runResult.game;
+      host.onPaused = (p) => (p ? game.pause() : game.resume());
+      try {
+        // Keep the PHP request queue free while the host owns the game loop;
+        // async state-component calls can now enqueue another PHP request.
+        await host.startGameLoop(() => {});
+      } finally {
+        host.onPaused = undefined;
+      }
+    }
     getActiveEngine()?.dispose();
     labEngineDisposed();
     return result;

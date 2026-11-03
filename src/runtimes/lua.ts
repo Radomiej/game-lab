@@ -1,4 +1,5 @@
 import { LuaFactory, type LuaEngine, type LuaMultiReturn } from "wasmoon";
+import luaWasmUrl from "wasmoon/dist/glue.wasm?url";
 import type { LabHost, LabRuntime, RunRequest, RunResult } from "../core/protocol";
 import { createLabFacade } from "../core/host";
 import type { ComponentBridge } from "../core/world";
@@ -21,7 +22,7 @@ export const luaRuntime: LabRuntime = {
   async load(onProgress: (msg: string) => void): Promise<void> {
     if (engine) return;
     onProgress("ładowanie Lua 5.4 (wasmoon)…");
-    const factory = new LuaFactory();
+    const factory = new LuaFactory(luaWasmUrl);
     engine = await factory.createEngine({
       openStandardLibs: true,
       injectObjects: true,

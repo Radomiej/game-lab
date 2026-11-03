@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "build:csharp-bridge": "node scripts/build-lab-bridge.mjs",
     "build:teavm-bridge": "bash scripts/build-teavm-bridge.sh",
-    "test:teavm-sync": "node scripts/test-teavm-sync.mjs"
+    "test:teavm-sync": "node scripts/test-teavm-sync.mjs",
+    "test:interop": "node scripts/test-interop-browser.mjs",
+    "test": "npm run test:teavm-sync && npm run test:interop"
   },
   "dependencies": {
     "@luau-rs/luau": "^0.739.0",

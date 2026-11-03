@@ -10,9 +10,10 @@ import { getActiveGame, getActiveEngine, labEngineDisposed } from "../engine/ind
 // przez rt.regFunc wołają lab.* SYNCHRONICZNIE (jak JS/Lua/Python).
 // Header <lab.h> (patrz labInclude niżej) wystawia lab_spawn, lab_getProp…
 //
-// Limitacja: komponentu z kodu C++ nie da się zarejestrować (interpreter
-// jest jednorazowy — po main() nie ma do czego wracać). C++ może więc
-// spawnować/czytać/pisać/wołać, ale nie dostarczać żywych komponentów.
+// Komponenty C++ zachowują runtime JSCPP po main() i używają małego ABI
+// lab_attachComponent(object, kind, getFn, setFn, invokeFn). Callbacki get/set
+// są liczbowe, invoke przyjmuje najwyżej jeden argument liczbowy.
+// Interpreter nadal wykonuje main() tylko raz i nie ma automatycznego update(dt).
 //
 // Ścieżka docelowa (patrz README): prawdziwy clang skompilowany do WASM
 // (browsercc / llvm-wasi / debugger-sh) — wtedy silnik gry dostaje się
@@ -26,6 +27,8 @@ type JSCppConfig = {
   debug?: boolean;
 };
 
+type JSCppDebugger = { rt: JSCppRuntime };
+
 type JSCppRuntime = {
   intTypeLiteral: unknown;
   doubleTypeLiteral: unknown;
@@ -34,14 +37,18 @@ type JSCppRuntime = {
   boolTypeLiteral?: unknown;
   normalPointerType(t: unknown): unknown;
   val(t: unknown, v: unknown): unknown;
+  getFunc(scope: string, name: string, args: unknown[]): CppCallable;
   raiseException(msg: string): never;
   getStringFromCharArray(v: unknown): string;
   makeCharArrayFromString(s: string): unknown;
   regFunc(f: unknown, scope: string, name: string, args: unknown[], ret: unknown): void;
 };
 
+type CppCallable = (rt: JSCppRuntime, thisValue: unknown, ...args: unknown[]) => Generator<unknown, unknown, unknown>;
+type CppSession = { runtime: JSCppRuntime | null; lab: LabFacade };
+
 type JSCpp = {
-  run(code: string, input: string, config: JSCppConfig): number;
+  run(code: string, input: string, config: JSCppConfig): number | JSCppDebugger;
   includes: Record<string, { load(rt: JSCppRuntime): void }>;
 };
 
@@ -49,9 +56,36 @@ type LabFacade = ReturnType<typeof createLabFacade>;
 
 let jscpp: JSCpp | null = null;
 let activeLab: LabFacade | null = null;
+let activeSession: CppSession | null = null;
 
 const strArg = (rt: JSCppRuntime, v: unknown): string => rt.getStringFromCharArray(v);
 const numArg = (v: unknown): number => Number((v as { v: number }).v ?? 0);
+
+function callCppFunction(session: CppSession, name: string, signature: unknown[], args: unknown[]): unknown {
+  const runtime = session.runtime;
+  if (!runtime) throw new Error("C++ component runtime is no longer available");
+  const fn = runtime.getFunc("global", name, signature);
+  const previousLab = activeLab;
+  activeLab = session.lab;
+  try {
+    return executeCppGenerator(fn(runtime, null, ...args), 15_000);
+  } finally {
+    activeLab = previousLab;
+  }
+}
+
+function executeCppGenerator(generator: Generator<unknown, unknown, unknown>, timeoutMs: number): unknown {
+  const startedAt = Date.now();
+  let next: IteratorResult<unknown>;
+  do {
+    next = generator.next();
+    if (Date.now() - startedAt > timeoutMs) {
+      try { generator.return?.(undefined); } catch { /* preserve timeout */ }
+      throw new Error(`C++ execution exceeded ${timeoutMs}ms`);
+    }
+  } while (!next.done);
+  return next.value;
+}
 
 function labIncludeLoad(rt: JSCppRuntime): void {
   const tInt = rt.intTypeLiteral;
@@ -71,6 +105,47 @@ function labIncludeLoad(rt: JSCppRuntime): void {
       return rt2.val(tInt, id);
     },
     g, "lab_spawn", [tCharPtr], tInt,
+  );
+  rt.regFunc(
+    (rt2: JSCppRuntime, _this: unknown, obj: unknown, kind: unknown, getter: unknown, setter: unknown, invoker: unknown) => {
+      const session = activeSession;
+      if (!session) rt2.raiseException("lab.h: brak aktywnej sesji C++");
+      const lab = need();
+      const getName = strArg(rt2, getter);
+      const setName = strArg(rt2, setter);
+      const callName = strArg(rt2, invoker);
+      let disposed = false;
+      let componentId = 0;
+      componentId = lab.attachBridge(numArg(obj), strArg(rt2, kind), {
+        get: (property) => {
+          if (disposed) return undefined;
+          const result = callCppFunction(session, getName, [tInt, tCharPtr], [rt2.val(tInt, componentId), rt2.makeCharArrayFromString(property)]);
+          return Number((result as { v?: unknown } | null)?.v ?? 0);
+        },
+        set: (property, value) => {
+          if (disposed) return;
+          callCppFunction(session, setName, [tInt, tCharPtr, tDbl], [
+            rt2.val(tInt, componentId),
+            rt2.makeCharArrayFromString(property),
+            rt2.val(tDbl, Number(value) || 0),
+          ]);
+        },
+        invoke: (method, args) => {
+          if (disposed) throw new Error("C++ component was disposed");
+          if (args.length > 1) throw new Error("C++ provider ABI currently accepts at most one numeric argument");
+          const result = callCppFunction(session, callName, [tInt, tCharPtr, tDbl], [
+            rt2.val(tInt, componentId),
+            rt2.makeCharArrayFromString(method),
+            rt2.val(tDbl, Number(args[0]) || 0),
+          ]);
+          return Number((result as { v?: unknown } | null)?.v ?? 0);
+        },
+        listMembers: () => [{ name: "value", kind: "prop" as const }],
+        dispose: () => { disposed = true; },
+      });
+      return rt2.val(tInt, componentId);
+    },
+    g, "lab_attachComponent", [tInt, tCharPtr, tCharPtr, tCharPtr, tCharPtr], tInt,
   );
   rt.regFunc(
     (rt2: JSCppRuntime, _this: unknown, obj: unknown) => {
@@ -185,13 +260,23 @@ export const cppRuntime: LabRuntime = {
 
     activeLab = createLabFacade(host, "cpp", { files: req.files });
     try {
-      const code = jscpp.run(source, req.stdin ?? "", {
+      const lab = createLabFacade(host, "cpp", { files: req.files });
+      activeLab = lab;
+      const session: CppSession = { runtime: null, lab };
+      activeSession = session;
+      const debugRuntime = jscpp.run(source, req.stdin ?? "", {
         stdio: {
           write: (s) => host.stdout(s),
           drain: () => host.readStdinLine(),
         },
         unsigned_overflow: "error",
+        debug: true,
       });
+      if (typeof debugRuntime === "number") throw new Error("JSCPP did not return the retained interpreter runtime");
+      session.runtime = debugRuntime.rt;
+      const main = session.runtime.getFunc("global", "main", []);
+      const mainResult = executeCppGenerator(main(session.runtime, null), 15_000);
+      const code = Number((mainResult as { v?: unknown } | null)?.v ?? 0);
 
       // Skrypt mógł zmaterializować scenę (attachRenderer/spawn) — trzymaj do Stop.
       const game = getActiveGame();
@@ -211,6 +296,7 @@ export const cppRuntime: LabRuntime = {
       return { status: isSyntax ? "compile-error" : "runtime-error", message: msg };
     } finally {
       activeLab = null;
+      activeSession = null;
       getActiveEngine()?.dispose();
       labEngineDisposed();
     }

@@ -336,6 +336,13 @@ export function createLabFacade(host: LabHost, lang: string, ctx?: { files?: Rec
     call(compId: number, method: string, ...args: unknown[]): unknown {
       return world.call(compId, method, args);
     },
+    callAsync(compId: number, method: string, ...args: unknown[]): Promise<unknown> {
+      return world.callAsync(compId, method, args);
+    },
+    callByKindAsync(kind: string, method: string, ...args: unknown[]): Promise<unknown> {
+      const compId = world.find(kind);
+      return compId == null ? Promise.resolve(undefined) : world.callAsync(compId, method, args);
+    },
     destroyObject(objectId: number): void {
       world.destroyObject(objectId);
       bridgeDestroyObject(objectId);

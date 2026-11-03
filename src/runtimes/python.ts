@@ -58,20 +58,39 @@ export const pythonRuntime: LabRuntime = {
     const labForPy = {
       ...lab,
       attachComponent(objectId: number, kind: string, impl: Record<string, unknown>): number {
+        // Arguments crossing from Python into this JS callback are borrowed
+        // proxies. Keep an owned copy because the component outlives runPythonAsync.
+        const ownedImpl = (impl as unknown as { copy?: () => Record<string, unknown> }).copy?.() ?? impl;
+        const fromPython = (value: unknown): unknown => {
+          const proxy = value as { toJs?: () => unknown; destroy?: () => void } | null;
+          if (!proxy || typeof proxy !== "object" || typeof proxy.toJs !== "function") return value;
+          try { return proxy.toJs(); } finally { proxy.destroy?.(); }
+        };
         const bridge: ComponentBridge = {
-          get: (k) => impl[k],
+          get: (k) => fromPython(ownedImpl[k]),
           set: (k, v) => {
-            impl[k] = v;
+            ownedImpl[k] = v;
           },
           invoke: (m, args) => {
-            const fn = impl[m];
-            return typeof fn === "function" ? (fn as (...a: unknown[]) => unknown)(...args) : undefined;
+            const fn = ownedImpl[m];
+            return typeof fn === "function"
+              ? fromPython((fn as (...a: unknown[]) => unknown)(...args))
+              : undefined;
           },
-          listMembers: () =>
-            ((membersFn(impl) as { toJs(): [string, boolean][] }).toJs() ?? []).map(([name, isFn]) => ({
-              name,
-              kind: isFn ? ("method" as const) : ("prop" as const),
-            })),
+          listMembers: () => {
+            const members = membersFn(ownedImpl) as { toJs(): [string, boolean][]; destroy?: () => void };
+            try {
+              return (members.toJs() ?? []).map(([name, isFn]) => ({
+                name,
+                kind: isFn ? ("method" as const) : ("prop" as const),
+              }));
+            } finally {
+              members.destroy?.();
+            }
+          },
+          dispose: () => {
+            (ownedImpl as unknown as { destroy?: () => void }).destroy?.();
+          },
         };
         return lab.attachBridge(objectId, kind, bridge);
       },
@@ -83,6 +102,12 @@ export const pythonRuntime: LabRuntime = {
     };
 
     try {
+      // Pyodide converts a plain JS object into a Python dict. Expose the
+      // facade as an attribute API, matching the other language runtimes.
+      await pyodide.runPythonAsync(
+        "from types import SimpleNamespace\nlab = SimpleNamespace(**lab)",
+        { globals },
+      );
       await pyodide.runPythonAsync(source, { globals });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
