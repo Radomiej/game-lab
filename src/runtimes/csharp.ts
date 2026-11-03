@@ -125,7 +125,9 @@ export const csharpRuntime: LabRuntime = {
     const lab = createLabFacade(host, "cs", { files: req.files });
     activeLab = lab;
     try {
-      const compilation = await mod.createCompilationAsync(source);
+      // Lab.* pochodzi z LabBridge.dll (namespace LabBridge) — using musi
+      // być pierwszą linią, więc prepend jest zawsze bezpieczny.
+      const compilation = await mod.createCompilationAsync("using LabBridge;\n" + source);
       const result = await compilation.run();
       if (result.success) {
         if (result.stdOut) host.stdout(result.stdOut);
