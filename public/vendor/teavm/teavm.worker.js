@@ -13,6 +13,7 @@ const TEAVM_URLS = {
   compiler: "/vendor/teavm/cdn/compiler.wasm",
   sdk: "/vendor/teavm/cdn/compile-classlib-teavm.bin",
   classlib: "/vendor/teavm/cdn/runtime-classlib-teavm.bin",
+  bridge: "/vendor/teavm/bridge/Lab.class",
 };
 
 let compilerState;
@@ -39,7 +40,9 @@ function labInvoke(op, payload) {
   self.postMessage({ command: "lab-call", op, payload });
   Atomics.wait(i32, 0, 0);
   const len = Math.max(0, Atomics.load(i32, 1));
-  return new TextDecoder().decode(u8.subarray(8, 8 + len));
+  const response = new Uint8Array(len);
+  response.set(u8.subarray(8, 8 + len));
+  return new TextDecoder().decode(response);
 }
 self.__lab = {
   spawn: (name) => Number(labInvoke("spawn", { name: labJstr(name) })) || 0,
@@ -67,17 +70,18 @@ async function fetchBytes(url) {
 }
 
 async function initialize() {
-  const [{ load }, compilerBytes, sdk, classlib] = await Promise.all([
+  const [{ load }, compilerBytes, sdk, classlib, bridge] = await Promise.all([
     import(TEAVM_URLS.runtime),
     fetchBytes(TEAVM_URLS.compiler),
     fetchBytes(TEAVM_URLS.sdk),
     fetchBytes(TEAVM_URLS.classlib),
+    fetchBytes(TEAVM_URLS.bridge),
   ]);
   const compilerModule = await load(compilerBytes);
   const compiler = compilerModule.exports.createCompiler();
   compiler.setSdk(sdk);
   compiler.setTeaVMClasslib(classlib);
-  compilerState = { compiler, load };
+  compilerState = { compiler, load, bridge };
 }
 
 function diagnosticToJson(diagnostic) {
@@ -104,7 +108,7 @@ function classVersions(compiler) {
 }
 
 async function compileAndRun(message) {
-  const { compiler, load } = compilerState;
+  const { compiler, load, bridge } = compilerState;
   stopGameRuntime();
   const diagnostics = [];
   let phase = "javac";
@@ -112,6 +116,7 @@ async function compileAndRun(message) {
   try {
     compiler.clearSourceFiles();
     compiler.clearOutputFiles();
+    compiler.addClassFile("engine/Lab.class", bridge);
     for (const [fileName, source] of prepareJavaSources(message.files || {})) compiler.addSourceFile(fileName, source);
 
     self.postMessage({ command: "phase", id: message.id, phase: "Kompiluję kod Java w przeglądarce…" });

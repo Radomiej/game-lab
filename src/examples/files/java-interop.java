@@ -1,7 +1,6 @@
-// Interop Java ↔ wspólna scena (WorldRegistry) — wywołania Lab.* są
-// SYNCHRONICZNE (worker czeka na SharedArrayBuffer, host odpowiada od razu).
-// Scenariusz testowy: najpierw odpal lua-ai (komponent Chaser w Lua),
-// potem STOP i odpal ten plik — Java czyta pola komponentu z Lua.
+// Interop Java ↔ wspólna scena (WorldRegistry) — odczyty, zapisy i wywołania
+// metod Lab.* działają synchronicznie w miejscu wywołania.
+// Najpierw odpal lua-ai (komponent Chaser w Lua), potem STOP i odpal ten plik.
 
 public class GameMain extends Game {
     int enemyObj;
@@ -21,8 +20,7 @@ public class GameMain extends Game {
         Lab.pushProp(marker, "team", "red");
         Lab.pushProp(marker, "hp", "100");
 
-        // Odszukanie Chasera dopiero w onUpdate — snapshot świata
-        // dociera po pierwszej klatce (Lab.findComponent czyta go lokalnie).
+        // Chaser jest dostępny od razu przez synchroniczny findComponent.
 
         GameObject hud = createObject("HUD");
         hud.setPosition(320, 24);
@@ -39,7 +37,8 @@ public class GameMain extends Game {
                 System.out.println("[java] Chaser.x = " + Lab.getNum(chaser, "x"));
                 // zapis pola komponentu Lua + wywołanie jego metody
                 Lab.setNum(chaser, "speed", 260);
-                Lab.call(chaser, "setTarget", "[200, 200]");
+                int callId = Lab.call(chaser, "setTarget", "[200, 200]");
+                System.out.println("[java] setTarget result = " + Lab.pollResult(callId));
             }
         }
         if (chaser != 0) {

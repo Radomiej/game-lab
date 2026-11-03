@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "build:csharp-bridge": "node scripts/build-lab-bridge.mjs"
+    "build:csharp-bridge": "node scripts/build-lab-bridge.mjs",
+    "build:teavm-bridge": "bash scripts/build-teavm-bridge.sh",
+    "test:teavm-sync": "node scripts/test-teavm-sync.mjs"
   },
   "dependencies": {
     "@luau-rs/luau": "^0.739.0",

@@ -3,7 +3,6 @@
 // silnik → pakiet `engine`, GameLauncher → most @JSExport worker↔Java.
 
 import { gameEngineRuntimeFiles } from "./gameEngineRuntime.js";
-import labJavaSource from "./Lab.java?raw";
 
 const GAME_CLASS = /\bclass\s+(\w+)\s+extends\s+Game\b/;
 const MAIN_METHOD = /\bpublic\s+static\s+void\s+main\s*\(/;
@@ -32,6 +31,7 @@ export function gameEditorFiles(files: Record<string, string>): Record<string, s
 
 const launcher = `package lab;
 import engine.*;
+import engine.Lab;
 import org.teavm.jso.JSExport;
 public class GameLauncher {
     private static GameMain game;
@@ -85,7 +85,7 @@ export function prepareGameRequest(files: Record<string, string>, entry: string)
   const game = findGameClass(files, entry);
   if (!game) return { files, mainClass: mainClassFor(files, entry) };
 
-  const out: Record<string, string> = { ...gameEngineRuntimeFiles, "Lab.java": labJavaSource };
+  const out: Record<string, string> = { ...gameEngineRuntimeFiles };
   for (const [name, source] of Object.entries(gameEditorFiles(files))) {
     if (!name.endsWith(".java")) continue;
     // Klasa gry normalizowana do GameMain (konwencja GameLauncher + java-lab).
@@ -100,7 +100,7 @@ export function prepareGameRequest(files: Record<string, string>, entry: string)
     if (declaration && declaration[1] !== "lab") {
       throw new Error(`Pliki gry używają wspólnego pakietu lab. Usuń deklarację package z ${name}.`);
     }
-    out[renamed] = `package lab;\nimport engine.*;\n${code.replace(/^\s*package\s+lab\s*;/m, "")}`;
+    out[renamed] = `package lab;\nimport engine.*;\nimport engine.Lab;\n${code.replace(/^\s*package\s+lab\s*;/m, "")}`;
   }
   if (!out["GameMain.java"]) {
     throw new Error("Nie znaleziono klasy gry — plik z `class … extends Game` musi istnieć.");

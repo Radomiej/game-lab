@@ -221,10 +221,8 @@ function formatDiagnostics(diagnostics: unknown): string {
 }
 
 // --- Interop Java↔świat ---
-// ZAPISY: Java emituje "lab|..." w strumieniu klatki (GameCanvas.frame()+Lab.drain())
-// — aplikujemy je w kolejności emisji, w tej samej klatce (deterministyczne).
-// ODCZYTY: snapshot świata pchany do workera po każdej klatce (game-world).
-// SAB+lab-call zostaje jako ścieżka na wypadek powrotu jso (dziś: uśpiona).
+// Główna ścieżka: @JSBody w workerze czeka na odpowiedź hosta przez SharedArrayBuffer.
+// Obsługa kolejek i snapshotów niżej zostaje dla zgodności ze starszymi modułami Java.
 let labSab: SharedArrayBuffer | undefined;
 let labFacade: ReturnType<typeof createLabFacade> | undefined;
 const labEncoder = new TextEncoder();
@@ -384,7 +382,7 @@ function labService(op: string, p: Record<string, unknown>): string {
         const cid = num(p.compId);
         const prop = String(p.prop);
         const v = javaCompState.has(cid) ? javaCompState.get(cid)![prop] : lab.getProp(cid, prop);
-        return v === undefined || v === null ? "" : JSON.stringify(v);
+        return v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v);
       }
       case "set": {
         const cid = num(p.compId);
@@ -476,7 +474,7 @@ function onMessage({ data }: MessageEvent) {
           worker?.postMessage({ command: "game-frame-ack", gameId: data.gameId, frameId: data.frameId });
         }
       }
-      // snapshot świata → worker (Lab.getProp/getX/findComponent w Javie)
+      // Dane do ewentualnego fallbacku starszych modułów Java.
       worker?.postMessage({
         command: "game-world",
         state: buildWorldState(),
