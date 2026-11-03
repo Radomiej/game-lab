@@ -62,9 +62,11 @@ public class Main {
   }
 }`);
 
+console.log('[phase] compile start');
 if (!compiler.compile()) {
   throw new Error(`Java compile failed: ${JSON.stringify(diagnostics)}`);
 }
+console.log('[phase] compile ok, generating wasm');
 if (!compiler.generateWebAssembly({ outputName: 'sync-smoke', mainClass: 'lab.Main' })) {
   throw new Error(`TeaVM generation failed: ${JSON.stringify(diagnostics)}`);
 }

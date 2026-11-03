@@ -96,9 +96,9 @@ Promise w `invoke`.
 | Lua | **wasmoon** (Lua 5.4→WASM) | ~0.5 MB | działa: konsola + gra + interop |
 | Luau (Roblox) | **@luau-rs/luau** (Luau 0.739→WASM) | ~2 MB | działa: konsola + interop (sync) |
 | Python | Pyodide (CPython→WASM, lazy CDN) | ~10–30 MB | działa: konsola + gra + interop |
-| C++ | JSCPP (interpreter podzbioru) | ~0.5 MB | konsola; gra wymaga clang→WASM |
-| C# | **@wasmsharp/core** (.NET WASM + Roslyn) | ~41 MB lazy | działa: konsola (prawdziwa kompilacja) |
-| Java | **slot** — TeaVM z java-lab | ~7 MB | opis niżej |
+| C++ | JSCPP (interpreter podzbioru) | ~0.5 MB | działa: konsola + interop (`lab.h`, sync) |
+| C# | **@wasmsharp/core** (.NET WASM + Roslyn) | ~41 MB lazy | działa: konsola + interop (`LabBridge.dll`, sync) |
+| Java | **TeaVM 0.16** (javac+backend WASM w workerze) | ~10 MB lazy | działa: konsola + gra + interop (sync) |
 
 ## Sloty
 
@@ -115,12 +115,31 @@ oficjalny typecheck w przeglądarce (wartość pedagogiczna dla uczniów
 Robloxa). Roblox-specific API (`game`, `Instance`, `Vector3`) można
 mapować na `lab.*`/`WorldRegistry`.
 
-### Java (TeaVM) — do podpięcia
+### Java (TeaVM 0.16) — synchroniczny interop
 
-Assety i know-how już istnieją: `C:\Nauka\java-lab\public\vendor\teavm`
-(`compiler.wasm` ~4 MB, classlib `.bin`, `teavm.worker.js`) oraz
-`src/services/teavmRunner.js`. Nakładka: worker ładuje compiler.wasm,
-Java→WASM, komendy draw z silnika mapować 1:1 na `DrawCmd`.
+Worker `public/vendor/teavm/teavm.worker.js` ładuje compiler.wasm +
+classlib i kompiluje źródła ucznia + silnik `engine.*` do WASM. Most
+Java→host jest **w pełni synchroniczny**: `src/engine/java/Lab.java`
+deklaruje natywne `@JSBody` wołające `self.__lab.*`; worker w
+`labInvoke` wysyła `lab-call` do main, blokuje się `Atomics.wait` na
+SharedArrayBuffer, main obsługuje wywołanie przez `labService`
+(`src/runtimes/java.ts`) i budzi workera. Wymaga COOP/COEP —
+nagłówki ustawione w `vite.config.ts` i `vercel.json`.
+
+**Ważne — `Lab.java` nie może być kompilowane ze źródła**: wbudowany
+w compiler.wasm javac ma stack overflow na każdej klasie z `@JSBody`
+(zweryfikowane nawet na `@JSBody(script="return 1")`). Dlatego most
+jest prekompilowany do `public/vendor/teavm/bridge/Lab.class` i
+wstrzykiwany przez `compiler.addClassFile`. Rekompilacja po zmianach
+w `Lab.java` (wymagany JDK, JAVA_HOME):
+
+```bash
+JAVA_HOME="$HOME/.jdks/openjdk-26.0.2.1" bash scripts/build-teavm-bridge.sh
+```
+
+(skrypt pobiera `teavm-jso-0.16.0.jar` z Maven i woła `javac --release 8`).
+Test end-to-end mostu w Node (bez przeglądarki): `npm run test:teavm-sync`.
+Kanał sync testowany: `__lab` mock → pełna ścieżka compile→WASM→wywołania.
 
 ### C# (@wasmsharp/core) — vendored
 
@@ -148,9 +167,10 @@ do `lab.*` — gamedev/interop C# wymaga własnego host-assembly z
 ## Ograniczenia POC (świadome)
 
 - Student code jedzie w main thread — nieskończona pętla w JS zamraża
-  UI (wasmoon ma `functionTimeout`, inne runtime nie). Docelowo
-  Web Workery jak w java-lab; wtedy sync interop wymaga
-  SharedArrayBuffer+Atomics → COOP/COEP (zakomentowane w vite.config).
+  UI (wasmoon ma `functionTimeout`, inne runtime nie). Java już
+  jedzie w workerze — jej sync most wymaga SharedArrayBuffer+Atomics,
+  więc COOP/COEP jest **włączone** (vite.config + vercel.json) — przy
+  dodawaniu zewnętrznych assetów pamiętać o CORP/CORS.
 - stdin: kolejka linii, nie blokująca. Blokujący `cin`/`input()`
   = Atomics.wait + izolacja cross-origin.
 - Marshal interopu = prymitywy (number/string/bool/handle-id). Obiekty

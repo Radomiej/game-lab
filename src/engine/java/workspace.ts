@@ -37,9 +37,7 @@ public class GameLauncher {
     private static GameMain game;
     public static void main(String[] args) { game = new GameMain(); game.start(); }
     @JSExport public static void tick(double delta) { game.step(delta); }
-    @JSExport public static String frame() { return GameCanvas.frame() + Lab.drain(); }
-    @JSExport public static void setWorldState(String raw, int rev) { Lab.setWorldState(raw, rev); }
-    @JSExport public static void setCallResults(String raw) { Lab.setCallResults(raw); }
+    @JSExport public static String frame() { return GameCanvas.frame(); }
     @JSExport public static void setKey(String key, boolean pressed) { game.input.setKey(key, pressed); }
     @JSExport public static void setPointer(double x,double y) { game.input.setPointer(x,y); }
     @JSExport public static void setMouseButton(int button,boolean pressed) { game.input.setMouseButton(button,pressed); }

@@ -4,7 +4,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.teavm.jso.JSBody;
 
-/** Synchronous bridge from Java to the shared lab world. */
+/**
+ * Synchronous bridge from Java to the shared lab world.
+ *
+ * UWAGA: ten plik NIE jest kompilowany ze źródła w przeglądarce —
+ * wbudowany w compiler.wasm javac ma stack overflow na @JSBody.
+ * Most leci jako prekompilowany public/vendor/teavm/bridge/Lab.class
+ * (compiler.addClassFile). Po zmianach: bash scripts/build-teavm-bridge.sh
+ * (wymaga JDK, JAVA_HOME). Weryfikacja: npm run test:teavm-sync.
+ */
 public final class Lab {
     private Lab() {}
 
@@ -44,13 +52,6 @@ public final class Lab {
 
     @JSBody(params = "objectId", script = "return self.__lab.posY(objectId);")
     private static native double jsPosY(int objectId);
-
-    /** Kept for compatibility with the frame export; writes now apply at the call site. */
-    public static String drain() { return ""; }
-
-    /** Legacy snapshot hooks are no longer needed by the synchronous bridge. */
-    public static void setWorldState(String raw, int rev) {}
-    public static void setCallResults(String raw) {}
 
     public static int spawn(String name) { return jsSpawn(name); }
 

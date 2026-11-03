@@ -145,10 +145,6 @@ function drawCommand(ctx: CanvasRenderingContext2D, cmd: Record<string, unknown>
     handleAudio(String(cmd.payload ?? ""));
     return;
   }
-  if (cmd.op === "lab") {
-    applyLabOp(String(cmd.payload ?? ""));
-    return;
-  }
   javaRenderer().draw(ctx, cmd);
 }
 
@@ -222,16 +218,11 @@ function formatDiagnostics(diagnostics: unknown): string {
 
 // --- Interop Java↔świat ---
 // Główna ścieżka: @JSBody w workerze czeka na odpowiedź hosta przez SharedArrayBuffer.
-// Obsługa kolejek i snapshotów niżej zostaje dla zgodności ze starszymi modułami Java.
 let labSab: SharedArrayBuffer | undefined;
 let labFacade: ReturnType<typeof createLabFacade> | undefined;
 const labEncoder = new TextEncoder();
 // Stan komponentów zadeklarowanych z Javy (pushProp publikuje pola do IDE).
 const javaCompState = new Map<number, Record<string, unknown>>();
-// Tokeny klienta z Javy (<0) → prawdziwe id w WorldRegistry.
-const javaTokens = new Map<number, number>();
-let javaCallResults = "";
-const JAVA_PROP_LIMIT = 24;
 
 function coerce(value: unknown): unknown {
   if (typeof value !== "string") return value;
@@ -240,131 +231,6 @@ function coerce(value: unknown): unknown {
   } catch {
     return value;
   }
-}
-
-function unesc(s: string): string {
-  return s.replace(/\\p/g, "|").replace(/\\\\/g, "\\");
-}
-
-function resolveHandle(handle: number): number {
-  return handle < 0 ? (javaTokens.get(handle) ?? 0) : handle;
-}
-
-// "lab|spawn|-1|Enemy" itd. — linia z Lab.drain() doklejona do frame().
-function applyLabOp(line: string) {
-  const lab = labFacade;
-  if (!lab) return;
-  const p = line.split("|");
-  try {
-    switch (p[0]) {
-      case "spawn": {
-        const token = Number(p[1]);
-        const id = lab.spawn(unesc(p.slice(2).join("|")));
-        javaTokens.set(token, id);
-        break;
-      }
-      case "attachComponent": {
-        const token = Number(p[1]);
-        const obj = resolveHandle(Number(p[2]));
-        if (!obj) return;
-        const state: Record<string, unknown> = {};
-        const cid = lab.attachBridge(obj, unesc(p.slice(3).join("|")), {
-          get: (k) => state[k],
-          set: (k, v) => {
-            state[k] = v;
-          },
-          invoke: () => undefined,
-          listMembers: () => Object.keys(state).map((k) => ({ name: k, kind: "prop" as const })),
-        });
-        javaCompState.set(cid, state);
-        javaTokens.set(token, cid);
-        break;
-      }
-      case "attachRenderer": {
-        const obj = resolveHandle(Number(p[1]));
-        if (obj) lab.attachRenderer(obj, JSON.parse(unesc(p.slice(2).join("|")) || "{}"));
-        break;
-      }
-      case "setPosition": {
-        const obj = resolveHandle(Number(p[1]));
-        if (obj) lab.setPosition(obj, Number(p[2]), Number(p[3]));
-        break;
-      }
-      case "destroy": {
-        const obj = resolveHandle(Number(p[1]));
-        if (obj) lab.destroyObject(obj);
-        break;
-      }
-      case "set": {
-        const cid = resolveHandle(Number(p[1]));
-        if (!cid) return;
-        const v = coerce(unesc(p.slice(3).join("|")));
-        if (javaCompState.has(cid)) javaCompState.get(cid)![unesc(p[2])] = v;
-        else lab.setProp(cid, unesc(p[2]), v);
-        break;
-      }
-      case "push": {
-        const cid = resolveHandle(Number(p[1]));
-        const state = javaCompState.get(cid);
-        if (state) state[unesc(p[2])] = unesc(p.slice(3).join("|"));
-        break;
-      }
-      case "call": {
-        const callId = p[1];
-        const cid = resolveHandle(Number(p[2]));
-        let res: unknown;
-        if (cid) {
-          const args = JSON.parse(unesc(p.slice(4).join("|")) || "[]");
-          res = lab.call(cid, unesc(p[3]), ...(Array.isArray(args) ? args : [args]));
-        }
-        javaCallResults += `callres|${callId}|${res === undefined ? "" : JSON.stringify(res)}\n`;
-        break;
-      }
-    }
-  } catch {
-    /* zniekształcony op — pomijamy */
-  }
-}
-
-// Snapshot świata → do workera (Lab.getProp/getX/findComponent czytają go w Javie).
-function buildWorldState(): string {
-  const lab = labFacade;
-  if (!lab) return "";
-  const lines: string[] = [];
-  const world = lab.worldInfo();
-  for (const c of world) {
-    lines.push(`comp|${c.id}|${c.objectId}|${c.lang}|${c.kind}`);
-    const state = javaCompState.get(c.id);
-    if (state) {
-      for (const [k, v] of Object.entries(state).slice(0, JAVA_PROP_LIMIT)) {
-        lines.push(`prop|${c.id}|${k}|${typeof v === "number" || typeof v === "string" ? v : JSON.stringify(v)}`);
-      }
-      continue;
-    }
-    const members = c.bridge.listMembers?.() ?? [];
-    for (const m of members.slice(0, JAVA_PROP_LIMIT)) {
-      if (m.kind !== "prop") continue;
-      const v = lab.getProp(c.id, m.name);
-      if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") {
-        lines.push(`prop|${c.id}|${m.name}|${v}`);
-      }
-    }
-  }
-  const objIds = new Set<number>();
-  for (const c of world) objIds.add(c.objectId);
-  for (const id of javaTokens.values()) objIds.add(id);
-  for (const o of currentHost?.world().describeScene() ?? []) {
-    objIds.add(o.id);
-    if (!world.some((c) => c.objectId === o.id)) lines.push(`obj|${o.id}|${o.name}`);
-  }
-  for (const o of objIds) {
-    const p = lab.getPosition(o);
-    if (p) lines.push(`pos|${o}|${p.x}|${p.y}`);
-  }
-  for (const [token, id] of javaTokens) {
-    if (token < 0) lines.push(`spawned|${token}|${id}`);
-  }
-  return lines.join("\n");
 }
 
 function labService(op: string, p: Record<string, unknown>): string {
@@ -474,14 +340,6 @@ function onMessage({ data }: MessageEvent) {
           worker?.postMessage({ command: "game-frame-ack", gameId: data.gameId, frameId: data.frameId });
         }
       }
-      // Dane do ewentualnego fallbacku starszych modułów Java.
-      worker?.postMessage({
-        command: "game-world",
-        state: buildWorldState(),
-        rev: data.frameId ?? frameCount,
-        callResults: javaCallResults,
-      });
-      javaCallResults = "";
     } else {
       // pojedynczy op poza klatką (np. clear powitalny)
       const ctx = currentCanvas?.getContext("2d");

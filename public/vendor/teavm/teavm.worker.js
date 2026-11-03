@@ -13,6 +13,8 @@ const TEAVM_URLS = {
   compiler: "/vendor/teavm/cdn/compiler.wasm",
   sdk: "/vendor/teavm/cdn/compile-classlib-teavm.bin",
   classlib: "/vendor/teavm/cdn/runtime-classlib-teavm.bin",
+  // engine.Lab nie może być kompilowane ze źródła — @JSBody wywala wbudowany
+  // javac (stack overflow). Most idzie jako prekompilowany .class (JDK offline).
   bridge: "/vendor/teavm/bridge/Lab.class",
 };
 
@@ -328,11 +330,6 @@ self.addEventListener("message", async ({ data }) => {
     if (data.pressed) gameKeys.add(data.key);
     else gameKeys.delete(data.key);
     invokeGameExport(gameRuntime, "setKey", [data.key, data.pressed], stopGameRuntime, event => self.postMessage(event));
-    return;
-  }
-  if (data?.command === "game-world") {
-    invokeGameExport(gameRuntime, "setWorldState", [data.state, data.rev], stopGameRuntime, event => self.postMessage(event));
-    if (data.callResults) invokeGameExport(gameRuntime, "setCallResults", [data.callResults], stopGameRuntime, event => self.postMessage(event));
     return;
   }
   if (data?.command === "game-stop") {
