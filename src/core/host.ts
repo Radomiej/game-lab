@@ -5,14 +5,26 @@ import { assetManifest } from "../engine/assets/Assets.js";
 import { userAssets } from "./userAssets";
 import { getActiveGame } from "../engine/index";
 import {
+  bridgeAttachCollider,
   bridgeAttachComponent,
+  bridgeAttachProjectile,
   bridgeAttachRenderer,
+  bridgeReset,
   bridgeDestroyObject,
   bridgeGetTransform,
   bridgeSetTransform,
   bridgeSpawn,
+  type ColliderSpec,
+  type ProjectileSpec,
   type RendererSpec,
 } from "../engine/bridge";
+
+/** Hook wykonujący plik projektu w jego runtime — podpina main.ts.
+ *  lab.evalFile("zombies.lua") → runtimeFor(ext).evalFile na tym samym hoście. */
+let evalFileHook: ((name: string, host: LabHost) => Promise<void>) | null = null;
+export function setEvalFileHook(fn: (name: string, host: LabHost) => Promise<void>): void {
+  evalFileHook = fn;
+}
 
 /** Wewnętrzny sygnał zatrzymania pętli — nie jest błędem ucznia. */
 export class LabStop extends Error {
@@ -126,6 +138,7 @@ export class DomLabHost implements LabHost {
 
   clearWorld(): void {
     this._world.clear();
+    bridgeReset();
   }
 
   private readonly _world = new WorldRegistry();
@@ -307,6 +320,24 @@ export function createLabFacade(host: LabHost, lang: string, ctx?: { files?: Rec
     attachRenderer(objectId: number, spec: RendererSpec = {}): boolean {
       return bridgeAttachRenderer(host, objectId, spec);
     },
+    /** Collider2D/CircleCollider2D/Trigger2D na obiekcie świata.
+     *  spec: {shape:'box'|'circle'|'trigger', width,height,radius,layer,mask,isTrigger} */
+    attachCollider(objectId: number, spec: ColliderSpec = {}): boolean {
+      return bridgeAttachCollider(host, objectId, spec);
+    },
+    /** Projectile2D — samodokłada trigger-collider + kontroler; trafienia
+     *  wołają onTrigger(otherId) na komponentach obiektu.
+     *  spec: {dx,dy,speed,lifetime,owner,maxHits,hitLayers} */
+    attachProjectile(objectId: number, spec: ProjectileSpec): boolean {
+      return bridgeAttachProjectile(host, objectId, spec);
+    },
+    /** Wykonuje plik projektu w jego runtime (rozszerzenie wybiera język)
+     *  na tym samym hoście/świecie — komponenty stamtąd są współdzielone.
+     *  Zwraca Promise — z JS: `await lab.evalFile("zombies.lua")`. */
+    evalFile(name: string): Promise<void> {
+      if (!evalFileHook) return Promise.reject(new Error("evalFile nie jest podpięty"));
+      return evalFileHook(name, host);
+    },
     setPosition(objectId: number, x: number, y: number): void {
       bridgeSetTransform(objectId, { x, y });
     },
@@ -361,7 +392,8 @@ export function createLabFacade(host: LabHost, lang: string, ctx?: { files?: Rec
       set: (k, v) => {
         o[k] = v;
       },
-      invoke: (m, args) => (typeof o[m] === "function" ? (o[m] as (...a: unknown[]) => unknown)(...args) : undefined),
+      invoke: (m, args) =>
+        typeof o[m] === "function" ? Reflect.apply(o[m] as (...a: unknown[]) => unknown, o, args) : undefined,
       listMembers: () =>
         Object.keys(o).map((k) => ({ name: k, kind: typeof o[k] === "function" ? ("method" as const) : ("prop" as const) })),
     };

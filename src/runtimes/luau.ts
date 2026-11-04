@@ -21,6 +21,48 @@ function classify(msg: string): "compile-error" | "runtime-error" {
   return /syntax|parse|expected|unexpected/i.test(msg) ? "compile-error" : "runtime-error";
 }
 
+// Fasada lab jako tabela Luau — każda metoda to createFunction.
+// attachComponent: impl to LuaTable; metody wołane z self (konwencja `:`).
+// Wspólna dla run() i evalFile() — zawsze z fasadą bieżącego hosta.
+function injectLab(L: Lua, host: LabHost, files: Record<string, string>): void {
+  const lab = createLabFacade(host, "luau", { files });
+  const labTable = L.createTable();
+  const fn = (name: string, f: (...a: unknown[]) => unknown) =>
+    labTable.set(name, L.createFunction((...a) => f(...a) as LuaCallbackResult));
+  for (const name of [
+    "print", "drawRect", "drawCircle", "drawLine", "drawText", "clear",
+    "spawn", "attachRenderer", "attachCollider", "attachProjectile",
+    "attachBridge", "setPosition", "getPosition",
+    "setTransform", "getTransform", "getComponent", "findComponent",
+    "getProp", "setProp", "call", "destroyObject", "worldInfo",
+    "isKeyDown", "isKeyPressed", "readFile", "listFiles", "asset",
+    "listAssets", "drawSprite", "evalFile",
+  ] as const) {
+    fn(name, (lab as Record<string, (...a: unknown[]) => unknown>)[name].bind(lab));
+  }
+  labTable.set(
+    "attachComponent",
+    L.createFunction((objectId: unknown, kind: unknown, impl: unknown) => {
+      const t = impl as LuaTable;
+      const bridge: ComponentBridge = {
+        get: (k) => t.get(k),
+        set: (k, v) => t.set(k, v as IntoLuaValue),
+        invoke: (m, args) => {
+          const f = t.get(m);
+          return f instanceof LuaFunction ? f.call(t, ...(args as IntoLuaValue[]))[0] : undefined;
+        },
+        listMembers: () =>
+          t.entries().map(([k, v]) => ({
+            name: String(k),
+            kind: v instanceof LuaFunction ? ("method" as const) : ("prop" as const),
+          })),
+      };
+      return lab.attachBridge(Number(objectId), String(kind), bridge);
+    }),
+  );
+  L.globals.set("lab", labTable);
+}
+
 export const luauRuntime: LabRuntime = {
   id: "luau",
   label: "Luau",
@@ -38,45 +80,7 @@ export const luauRuntime: LabRuntime = {
     const source = req.files[req.entry];
     if (source == null) return { status: "compile-error", message: `brak pliku ${req.entry}` };
     const L = lua;
-
-    const lab = createLabFacade(host, "luau", { files: req.files });
-
-    // Fasada lab jako tabela Luau — każda metoda to createFunction.
-    // attachComponent: impl to LuaTable; metody wołane z self (konwencja `:`).
-    const labTable = L.createTable();
-    const fn = (name: string, f: (...a: unknown[]) => unknown) =>
-      labTable.set(name, L.createFunction((...a) => f(...a) as LuaCallbackResult));
-    for (const name of [
-      "print", "drawRect", "drawCircle", "drawLine", "drawText", "clear",
-      "spawn", "attachRenderer", "attachBridge", "setPosition", "getPosition",
-      "setTransform", "getTransform", "getComponent", "findComponent",
-      "getProp", "setProp", "call", "destroyObject", "worldInfo",
-      "isKeyDown", "isKeyPressed", "readFile", "listFiles", "asset",
-      "listAssets", "drawSprite",
-    ] as const) {
-      fn(name, (lab as Record<string, (...a: unknown[]) => unknown>)[name].bind(lab));
-    }
-    labTable.set(
-      "attachComponent",
-      L.createFunction((objectId: unknown, kind: unknown, impl: unknown) => {
-        const t = impl as LuaTable;
-        const bridge: ComponentBridge = {
-          get: (k) => t.get(k),
-          set: (k, v) => t.set(k, v as IntoLuaValue),
-          invoke: (m, args) => {
-            const f = t.get(m);
-            return f instanceof LuaFunction ? f.call(t, ...(args as IntoLuaValue[]))[0] : undefined;
-          },
-          listMembers: () =>
-            t.entries().map(([k, v]) => ({
-              name: String(k),
-              kind: v instanceof LuaFunction ? ("method" as const) : ("prop" as const),
-            })),
-        };
-        return lab.attachBridge(Number(objectId), String(kind), bridge);
-      }),
-    );
-    L.globals.set("lab", labTable);
+    injectLab(L, host, req.files);
 
     const onPrint = (e: LuaOutputEvent) => host.stdout(e.text + "\n");
     L.addEventListener("print", onPrint);
@@ -129,6 +133,21 @@ export const luauRuntime: LabRuntime = {
     }
 
     return { status: "ok" };
+  },
+
+  /** lab.evalFile("x.luau") — wykonuje plik w trwałym VM na cudzym hoście. */
+  async evalFile(name: string, source: string, host: LabHost): Promise<void> {
+    if (!lua) throw new Error("luau: runtime nie załadowany");
+    injectLab(lua, host, {});
+    const onPrint = (e: LuaOutputEvent) => host.stdout(e.text + "\n");
+    lua.addEventListener("print", onPrint);
+    try {
+      lua.execute(source, { name });
+    } catch (err) {
+      throw new Error(`luau:${name}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      lua.removeEventListener("print", onPrint);
+    }
   },
 
   stop() {

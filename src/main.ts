@@ -1,4 +1,4 @@
-import { DomLabHost } from "./core/host";
+import { DomLabHost, setEvalFileHook } from "./core/host";
 import { RuntimeConsole } from "./ui/console";
 import { ProjectPanel, NEW_FILE_LANGS } from "./ui/project";
 import { SceneView } from "./ui/sceneView";
@@ -7,6 +7,7 @@ import { examples } from "./examples";
 import {
   assetManifest,
   ensureConsoleStyle,
+  getActiveEngine,
   getActiveGame,
   labEngineDisposed,
   registerAssetLive,
@@ -60,7 +61,11 @@ const zoomLabel = $("#zoom-label");
 const term = new RuntimeConsole(consoleEl, pillEl);
 const host = new DomLabHost(term, canvas);
 const editor = new CodeEditor(editorHostEl);
-if (import.meta.env.DEV) (window as unknown as { __editor: CodeEditor }).__editor = editor;
+if (import.meta.env.DEV) {
+  const w = window as unknown as { __editor: CodeEditor; __lab: unknown };
+  w.__editor = editor;
+  w.__lab = { host, getActiveEngine, getActiveGame, userAssets };
+}
 let currentFiles: Record<string, string> = {};
 const currentFolders = new Set<string>();
 
@@ -677,8 +682,22 @@ async function run(): Promise<void> {
     await runtime.load?.((m) => term.write("sys", m + "\n"));
     term.write("sys", `[${runtime.label}] ${settings.entry}\n`);
     host.begin(stdin);
+    // Świeża scena na run — stare komponenty/obiekty z poprzedniego
+    // uruchomienia nie mogą wyciekać (Unity play-mode semantics).
+    host.clearWorld();
     term.setStatus("running");
     canvas.focus();
+    // lab.evalFile("x.lua") z kodu gry — wykonuje plik projektu w jego
+    // runtime na TYM samym hoście/świecie (komponenty współdzielone).
+    setEvalFileHook(async (name, h) => {
+      const src = currentFiles[name];
+      if (src == null) throw new Error(`evalFile: brak pliku ${name}`);
+      const rt = runtimeFor(name);
+      if (!rt.evalFile) throw new Error(`evalFile: ${rt.label} nie wspiera wykonania modułu`);
+      if (rt.load) await rt.load((m) => term.write("sys", m + "\n"));
+      term.write("sys", `[${rt.label}] evalFile ${name}\n`);
+      await rt.evalFile(name, src, h);
+    });
     const res = await runtime.run(
       { files: currentFiles, entry: settings.entry, stdin, entryMethod: settings.method || undefined },
       host,
@@ -870,7 +889,7 @@ makeResizer($("#rs-console"), (dx, dy) => {
 
 // ---- start ----
 ensureConsoleStyle();
-const seed = examples.find((e) => e.id === "js-labgame") ?? examples[0];
+const seed = examples.find((e) => e.id === "zombie-survival") ?? examples[0];
 currentFiles = { ...seed.files };
 if (!currentFiles[settings.entry]) settings.entry = seed.entry;
 openFile = settings.entry in currentFiles ? settings.entry : seed.entry;

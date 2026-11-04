@@ -14,6 +14,40 @@ function classify(msg: string): "compile-error" | "runtime-error" {
   return /syntax error|unexpected/i.test(msg) ? "compile-error" : "runtime-error";
 }
 
+// Wspólna injekcja fasady lab dla run() i evalFile() — fasada zawsze
+// związana z AKTUALNYM hostem (run JS-a wstrzykuje swojego).
+function injectLab(st: LuaEngine, host: LabHost, files: Record<string, string>): void {
+  const lab = createLabFacade(host, "lua", { files });
+
+  // attachComponent: tabela Lua przychodzi jako proxy — mostek
+  // woła metody z self na pierwszym argumencie (konwencja `:`).
+  const labForLua = {
+    ...lab,
+    attachComponent(objectId: number, kind: string, impl: Record<string, unknown>): number {
+      const bridge: ComponentBridge = {
+        get: (k) => impl[k],
+        set: (k, v) => {
+          impl[k] = v;
+        },
+        invoke: (m, args) => {
+          const fn = impl[m];
+          return typeof fn === "function" ? (fn as (...a: unknown[]) => unknown)(impl, ...args) : undefined;
+        },
+        listMembers: () =>
+          Object.keys(impl).map((k) => ({
+            name: k,
+            kind: typeof impl[k] === "function" ? ("method" as const) : ("prop" as const),
+          })),
+      };
+      return lab.attachBridge(objectId, kind, bridge);
+    },
+  };
+  st.global.set("lab", labForLua);
+  st.global.set("print", (...args: unknown[]) =>
+    lab.print(args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join("\t")),
+  );
+}
+
 export const luaRuntime: LabRuntime = {
   id: "lua",
   label: "Lua",
@@ -37,36 +71,7 @@ export const luaRuntime: LabRuntime = {
     const source = req.files[req.entry];
     if (source == null) return { status: "compile-error", message: `brak pliku ${req.entry}` };
     const st = engine;
-
-    const lab = createLabFacade(host, "lua", { files: req.files });
-
-    // attachComponent: tabela Lua przychodzi jako proxy — mostek
-    // woła metody z self na pierwszym argumencie (konwencja `:`).
-    const labForLua = {
-      ...lab,
-      attachComponent(objectId: number, kind: string, impl: Record<string, unknown>): number {
-        const bridge: ComponentBridge = {
-          get: (k) => impl[k],
-          set: (k, v) => {
-            impl[k] = v;
-          },
-          invoke: (m, args) => {
-            const fn = impl[m];
-            return typeof fn === "function" ? (fn as (...a: unknown[]) => unknown)(impl, ...args) : undefined;
-          },
-          listMembers: () =>
-            Object.keys(impl).map((k) => ({
-              name: k,
-              kind: typeof impl[k] === "function" ? ("method" as const) : ("prop" as const),
-            })),
-        };
-        return lab.attachBridge(objectId, kind, bridge);
-      },
-    };
-    st.global.set("lab", labForLua);
-    st.global.set("print", (...args: unknown[]) =>
-      lab.print(args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join("\t")),
-    );
+    injectLab(st, host, req.files);
 
     let runError: RunResult | null = null;
     try {
@@ -118,6 +123,18 @@ export const luaRuntime: LabRuntime = {
     }
 
     return { status: "ok" };
+  },
+
+  /** lab.evalFile("x.lua") — wykonuje plik w trwałym VM na cudzym hoście.
+   *  Komponenty/fabryki zarejestrowane przez kod żyją dalej w rejestrze. */
+  async evalFile(name: string, source: string, host: LabHost): Promise<void> {
+    if (!engine) throw new Error("lua: runtime nie załadowany");
+    injectLab(engine, host, {});
+    try {
+      await engine.doString(`-- ${name}\n${source}`);
+    } catch (err) {
+      throw new Error(`lua:${name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   },
 
   stop() {

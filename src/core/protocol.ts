@@ -68,5 +68,11 @@ export interface LabRuntime {
   /** Lenie ładowanie ciężkich runtime (clang.wasm, pyodide). */
   load?(onProgress: (msg: string) => void): Promise<void>;
   run(req: RunRequest, host: LabHost): Promise<RunResult>;
+  /**
+   * Wykonuje plik projektu w tym runtime na cudzym hoście — bez przejmowania
+   * pętli/stdin (tryb "modułu"). Zarejestrowane komponenty żyją dalej
+   * i są tickowane przez silnik/hosta wołającego. lab.evalFile().
+   */
+  evalFile?(name: string, source: string, host: LabHost): Promise<void>;
   stop(): void;
 }

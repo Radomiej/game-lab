@@ -1,7 +1,7 @@
 import { transform } from "sucrase";
 import type { LabHost, LabRuntime, RunRequest, RunResult } from "../core/protocol";
 import { createLabFacade, LabStop } from "../core/host";
-import { createLabEngine, labEngineDisposed, type GameLabApi } from "../engine/index";
+import { createLabEngine, getActiveEngine, labEngineDisposed, type GameLabApi } from "../engine/index";
 import { bindWorld } from "../engine/bridge";
 
 // JavaScript/TypeScript: kod ucznia jest body funkcji; może zdefiniować
@@ -136,6 +136,37 @@ function makeRuntime(id: "javascript" | "typescript", label: string, ts: boolean
         return { status: aborted ? "stopped" : "ok" };
       }
       return { status: aborted ? "stopped" : "ok" };
+    },
+
+    /** lab.evalFile("x.js") — moduł w osobnym scope na cudzym hoście. */
+    async evalFile(name: string, source: string, host: LabHost): Promise<void> {
+      if (ts) {
+        try {
+          source = transform(source, { transforms: ["typescript"] }).code;
+        } catch (err) {
+          throw new Error(`typescript:${name}: ${String(err)}`);
+        }
+      }
+      const lab = createLabFacade(host, id, { files: { [name]: source } });
+      const join = (args: unknown[]) =>
+        args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ") + "\n";
+      const stdio = {
+        log: (...a: unknown[]) => host.stdout(join(a)),
+        info: (...a: unknown[]) => host.stdout(join(a)),
+        debug: (...a: unknown[]) => host.stdout(join(a)),
+        warn: (...a: unknown[]) => host.warn(join(a)),
+        error: (...a: unknown[]) => host.stderr(join(a)),
+        input: lab.input,
+      };
+      const GameLab = getActiveEngine() ?? (host.canvasEl ? createLabEngine(host.canvasEl) : null);
+      try {
+        const fn = new Function("lab", "console", "print", "input", "GameLab", `"use strict";\n${source}`) as (
+          ...a: unknown[]
+        ) => void;
+        fn(lab, stdio, lab.print, lab.input, GameLab);
+      } catch (err) {
+        throw new Error(`${id}:${name}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     },
 
     stop() {
