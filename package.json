@@ -9,17 +9,20 @@
     "preview": "vite preview",
     "build:csharp-bridge": "node scripts/build-lab-bridge.mjs",
     "build:teavm-bridge": "bash scripts/build-teavm-bridge.sh",
+    "test:orbit-export": "node --experimental-strip-types scripts/test-orbit-export.mjs",
     "test:teavm-sync": "node scripts/test-teavm-sync.mjs",
     "test:interop": "node scripts/test-interop-browser.mjs",
-    "test": "npm run test:teavm-sync && npm run test:interop"
+    "test": "npm run test:orbit-export && npm run test:teavm-sync && npm run test:interop"
   },
   "dependencies": {
     "@luau-rs/luau": "^0.739.0",
+    "@noble/hashes": "^1.8.0",
     "@php-wasm/universal": "^3.1.52",
     "@php-wasm/web": "^3.1.52",
     "@php-wasm/web-8-4": "^3.1.52",
     "@wasmsharp/core": "^0.10.2",
     "comlink": "^4.4.2",
+    "fflate": "^0.8.3",
     "JSCPP": "^2.0.9",
     "monaco-editor": "^0.55.1",
     "sucrase": "^3.35.0",

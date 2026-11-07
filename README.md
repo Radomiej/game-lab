@@ -197,3 +197,14 @@ wasmoon MIT (Lua 5.4/WASM), sucrase MIT, Pyodide Apache-2.0 (CDN),
 JSCPP MIT, @wasmsharp/core MIT (.NET WASM + Roslyn), comlink Apache-2.0.
 Ścieżka docelowa C++: `BertalanD/browsercc`,
 `msorvig/llvm-wasi`, `debugger-sh` (Stanford) — prawdziwy clang→WASM.
+
+## Eksport paczki Orbit
+
+Przycisk **Eksport .orbit** tworzy paczkę `orbit-game` v0 z `orbit.json`,
+SHA-256 plików i runtime `quickjs-lrp` / `game-lab-lrp/1`. Eksporter obsługuje
+projekty JavaScript oparte na `init()`, `update(dt)` i podstawowej fasadzie
+`lab.*` (rysowanie, wejście, assety atlasu i `readFile`). Odrzuca pliki
+innych języków, pełne API `GameLab.Game`/dźwięku i binarne assety — te
+funkcje wymagają adapterów dla Orbit. Paczkę `.orbit` można opublikować w
+Nekko Launcher → **Konsolki** → **Opublikuj grę konsolową**, a następnie
+zainstalować na urządzeniu po zeskanowaniu jego QR.

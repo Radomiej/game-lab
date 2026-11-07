@@ -19,10 +19,12 @@ import { CodeEditor } from "./ui/codeEditor";
 import { SoundEditor } from "./ui/soundEditor";
 import { ImageEditor, transparentPng } from "./ui/imageEditor";
 import type { AssetEntry } from "./engine/assets/Assets.js";
+import { buildOrbitPackage } from "./orbit-export";
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
 const runBtn = $<HTMLButtonElement>("#run");
+const orbitExportBtn = $<HTMLButtonElement>("#orbit-export");
 const stopBtn = $<HTMLButtonElement>("#stop");
 const clearAllBtn = $<HTMLButtonElement>("#clear-all");
 const settingsBtn = $<HTMLButtonElement>("#settings-btn");
@@ -735,6 +737,61 @@ editor.onDidChange(() => {
 });
 editor.addRunCommand(() => void run());
 runBtn.onclick = run;
+const orbitSendBtn = $<HTMLButtonElement>("#orbit-send");
+// A parent origin is accepted only when it agrees with the browser referrer.
+// No credentials are shared with the editor.
+let orbitParentOrigin: string | null = null;
+try {
+  const requested = new URLSearchParams(location.search).get("orbitParent");
+  if (window.parent !== window && requested && document.referrer && new URL(requested).origin === requested && new URL(document.referrer).origin === requested) orbitParentOrigin = requested;
+} catch { /* Standalone mode has no launcher handoff. */ }
+orbitSendBtn.hidden = !orbitParentOrigin;
+function exportOrbit(sendToLauncher: boolean) {
+  currentFiles[openFile] = editor.value;
+  const proposedName = settings.entry.replace(/\.(m?js)$/i, "").replace(/[^A-Za-z0-9 _-]+/g, " ").trim() || "Moja gra";
+  const name = prompt("Nazwa gry", proposedName);
+  if (!name) return;
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "gra";
+  const id = prompt("ID pakietu Orbit (max 48 znaków)", `com.orbit.${slug}`);
+  if (!id) return;
+  const version = prompt("Wersja gry", "0.1.0");
+  if (!version) return;
+  try {
+    const unsupportedAsset = userAssets.list().find(asset => asset.kind !== "text");
+    if (unsupportedAsset) throw new Error(`Orbit v0 nie pakuje jeszcze assetów obrazu/audio: ${unsupportedAsset.name}.`);
+    const bytes = buildOrbitPackage(currentFiles, settings.entry, { id: id.trim(), version: version.trim(), name: name.trim() });
+    if (sendToLauncher) {
+      if (!orbitParentOrigin) throw new Error("Brak połączenia z launcherem.");
+      const payload = bytes.slice().buffer;
+      const requestId = crypto.randomUUID();
+      const expectedOrigin = orbitParentOrigin;
+      const timer = window.setTimeout(() => {
+        window.removeEventListener("message", acknowledge);
+        term.write("error", "Launcher nie potwierdził odbioru paczki. Spróbuj ponownie.\n");
+      }, 10000);
+      function acknowledge(event: MessageEvent) {
+        if (event.source !== window.parent || event.origin !== expectedOrigin || event.data?.type !== "orbit:game-package-ack" || event.data?.requestId !== requestId) return;
+        clearTimeout(timer);
+        window.removeEventListener("message", acknowledge);
+        term.write("sys", "Launcher odebrał paczkę — wybierz publikację w sekcji Konsolki\n");
+      }
+      window.addEventListener("message", acknowledge);
+      window.parent.postMessage({ type: "orbit:game-package", version: 1, requestId, name: `${id.trim()}-${version.trim()}.orbit`, bytes: payload }, expectedOrigin, [payload]);
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: "application/zip" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${id.trim()}-${version.trim()}.orbit`;
+    a.click();
+    URL.revokeObjectURL(url);
+    term.write("sys", `wyeksportowano ${a.download} — wrzuć paczkę w Nekko Launcher → Konsolki → Opublikuj grę konsolową\n`);
+  } catch (err) {
+    term.write("error", `${err instanceof Error ? err.message : String(err)}\n`);
+  }
+}
+orbitExportBtn.onclick = () => exportOrbit(false);
+orbitSendBtn.onclick = () => exportOrbit(true);
 stopBtn.onclick = () => {
   const rt = runtimeFor(settings.entry);
   rt.stop();
